@@ -1,0 +1,6 @@
+/storage/data.json
+/storage/openshare.sqlite
+/storage/files/*
+!/storage/files/.gitkeep
+/storage/sessions/*
+!/storage/sessions/.gitkeep

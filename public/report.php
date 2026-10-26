@@ -1,0 +1,9 @@
+<?php
+require __DIR__ . '/../src/bootstrap.php'; startApp(); $user = requireLogin(); $data = readStore(); $rows = array_filter($data['files'], fn($f) => $user['role']==='admin' || $f['owner_id']===$user['id']);
+if (get('format') === 'csv') { header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename=openshare-report.csv'); $out=fopen('php://output','w'); fputcsv($out,['Tệp','Kích thước','Lượt tải']); foreach($rows as $f) fputcsv($out,[$f['original_name'],$f['size'],$f['download_count']]); exit; }
+$usage = userUsage($data, $user['id']); $diskFree = disk_free_space(FILE_ROOT); $missing = array_filter($rows, fn($file) => !is_file(FILE_ROOT . '/' . basename($file['stored_name'])));
+layoutStart('Báo cáo'); echo '<h1>Báo cáo truy cập</h1>';
+if ($missing) echo '<div class="flash error">Cảnh báo: '.count($missing).' tệp không còn tồn tại trên ổ đĩa.</div>';
+if ($diskFree !== false && $diskFree < MAX_FILE_BYTES) echo '<div class="flash error">Cảnh báo: ổ đĩa còn ít hơn mức cần thiết cho một tệp mới.</div>';
+echo '<section class="panel"><p>Đã dùng <strong>'.number_format($usage).'</strong> / '.number_format($user['quota']).' bytes</p><div class="bar"><i style="width:'.min(100, $usage/$user['quota']*100).'%"></i></div><p class="muted">Cảnh báo quota: '.($usage/$user['quota'] >= .8 ? 'dung lượng đã đạt từ 80%.' : 'dung lượng còn đủ.').'</p><p class="muted">Ổ đĩa còn trống: '.($diskFree === false ? 'Không xác định' : number_format($diskFree).' bytes').'</p><a class="button" href="/report.php?format=csv">Xuất CSV</a></section><section class="panel"><table><tr><th>Tệp</th><th>Dung lượng</th><th>Lượt tải</th></tr>';
+foreach($rows as $f) echo '<tr><td>'.h($f['original_name']).'</td><td>'.number_format($f['size']).'</td><td>'.(int)$f['download_count'].'</td></tr>'; echo '</table></section>'; layoutEnd();
