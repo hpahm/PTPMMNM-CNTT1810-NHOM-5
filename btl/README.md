@@ -7,6 +7,12 @@ lưu trong CSDL cấu hình (SQLite, MySQL hoặc SQL Server), còn tệp tải 
 
 ## Chạy thử
 
+Sau khi clone repository, chuyển vào thư mục dự án:
+
+```bash
+cd btl
+```
+
 ```bash
 bash lab.sh check
 bash lab.sh test
