@@ -25,6 +25,7 @@ if ((!$access && !($share && $share['password_hash'])) || safeStoredPath($file) 
 
 $extension = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
 $previewable = in_array($extension, ['pdf', 'txt', 'jpg', 'jpeg', 'png'], true);
+$pendingAcceptance = $user && $share && !isPublicShare($share) && $share['recipient_id'] === $user['id'] && !shareIsAccepted($share);
 $downloadQuery = $share ? '?share='.rawurlencode($share['id']) : '?file='.rawurlencode($fileId);
 $contentQuery = '?file='.rawurlencode($fileId).($share ? '&share='.rawurlencode($share['id']) : '');
 layoutStart('Xem trước · '.$file['original_name']);
@@ -35,6 +36,9 @@ if (!$access) {
     echo '<div class="preview-frame"><iframe src="/preview-content.php'.$contentQuery.'" title="Bản xem trước '.h($file['original_name']).'"></iframe></div>';
 } else {
     echo '<div class="preview-empty"><div class="empty-icon">□</div><h2>Chưa hỗ trợ xem trước định dạng này</h2><p>Định dạng '.h(strtoupper($extension)).' không thể hiển thị trực tiếp trên trình duyệt.</p><a class="button" href="/download.php'.$downloadQuery.'">⇩ Tải xuống tệp</a></div>';
+}
+if ($pendingAcceptance) {
+    echo '<section class="panel share-confirm"><h2>Lưu vào Tệp được chia sẻ?</h2><p class="muted">Bạn đã xem trước file. Xác nhận để lưu file này vào khu vực Được chia sẻ của bạn.</p><form method="post" action="/accept-share.php"><input type="hidden" name="csrf" value="'.h(csrf()).'"><input type="hidden" name="share" value="'.h($share['id']).'"><button>✓ Xác nhận lưu</button><a class="button secondary" href="/shared.php">Để sau</a></form></section>';
 }
 echo '</div>';
 layoutEnd();

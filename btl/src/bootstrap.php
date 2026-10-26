@@ -77,10 +77,11 @@ function layoutStart(string $title): void {
     $isFiles = $currentPath === '/';
     $isLogs = $currentPath === '/logs.php';
     $isReport = $currentPath === '/report.php';
+    $isShared = $currentPath === '/shared.php';
     $navClass = static fn(bool $active): string => $active ? ' class="active"' : '';
     echo '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.h($title).' · OpenShare</title><link rel="stylesheet" href="/assets/app.css"></head><body>';
     if ($user) {
-        echo '<header class="topbar"><a class="brand" href="/"><span class="brand-mark">O</span><span>OpenShare</span></a><form class="global-search" method="get" action="/"><span>⌕</span><input name="q" placeholder="Tìm trong Drive" aria-label="Tìm trong Drive"></form><div class="topbar-actions"><span class="help">?</span><details class="account-menu"><summary class="avatar" aria-label="Mở menu tài khoản">'.h(strtoupper(substr($user['name'], 0, 1))).'</summary><div class="account-dropdown"><strong>'.h($user['name']).'</strong><span>'.h($user['email']).'</span><a href="/logout.php">Đổi tài khoản</a><a href="/logout.php">Đăng xuất</a></div></details></div></header><div class="app-shell"><aside class="sidebar"><a class="new-button" href="/upload.php"><span>＋</span> Mới</a><nav class="side-nav"><a href="/"'.$navClass($isFiles).'><span>▣</span> Tệp của tôi</a><a href="/folders.php"'.$navClass($isFolders).'><span>▰</span> Thư mục</a><a href="/logs.php"'.$navClass($isLogs).'><span>◷</span> Hoạt động</a><a href="/report.php"'.$navClass($isReport).'><span>▤</span> Báo cáo</a></nav><div class="sidebar-bottom"><a href="/logout.php"><span>↪</span> Đăng xuất</a></div></aside><main>';
+        echo '<header class="topbar"><a class="brand" href="/"><span class="brand-mark">O</span><span>OpenShare</span></a><form class="global-search" method="get" action="/"><span>⌕</span><input name="q" placeholder="Tìm trong Drive" aria-label="Tìm trong Drive"></form><div class="topbar-actions"><span class="help">?</span><details class="account-menu"><summary class="avatar" aria-label="Mở menu tài khoản">'.h(strtoupper(substr($user['name'], 0, 1))).'</summary><div class="account-dropdown"><strong>'.h($user['name']).'</strong><span>'.h($user['email']).'</span><a href="/logout.php">Đổi tài khoản</a><a href="/logout.php">Đăng xuất</a></div></details></div></header><div class="app-shell"><aside class="sidebar"><a class="new-button" href="/upload.php"><span>＋</span> Mới</a><nav class="side-nav"><a href="/"'.$navClass($isFiles).'><span>▣</span> Tệp của tôi</a><a href="/shared.php"'.$navClass($isShared).'><span>◫</span> Được chia sẻ</a><a href="/folders.php"'.$navClass($isFolders).'><span>▰</span> Thư mục</a><a href="/logs.php"'.$navClass($isLogs).'><span>◷</span> Hoạt động</a><a href="/report.php"'.$navClass($isReport).'><span>▤</span> Báo cáo</a></nav><div class="sidebar-bottom"><a href="/logout.php"><span>↪</span> Đăng xuất</a></div></aside><main>';
     } else {
         echo '<header class="login-header"><a class="brand" href="/login.php"><span class="brand-mark">O</span><span>OpenShare</span></a><div class="login-links"><a href="/login.php">Đăng nhập</a><a href="/register.php">Đăng ký</a></div></header><main class="login-main">';
     }
@@ -202,6 +203,11 @@ function seedData(): array {
         id TEXT PRIMARY KEY, at TEXT NOT NULL, action TEXT NOT NULL,
         user_id TEXT NOT NULL, file_id TEXT, success INTEGER NOT NULL DEFAULT 1
     );
+    CREATE TABLE IF NOT EXISTS share_acceptances (
+        share_id TEXT PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        accepted_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner_id);
     CREATE INDEX IF NOT EXISTS idx_shares_file ON shares(file_id);
     CREATE INDEX IF NOT EXISTS idx_shares_recipient ON shares(recipient_id);
@@ -217,7 +223,11 @@ function seedData(): array {
         }
         foreach ($db->query('SELECT * FROM shares') as $row) {
             $row['queue'] = [];
+            $row['accepted'] = ($row['owner_id'] === $row['recipient_id']);
             $data['shares'][$row['id']] = $row;
+        }
+        foreach ($db->query('SELECT share_id FROM share_acceptances') as $row) {
+            if (isset($data['shares'][$row['share_id']])) $data['shares'][$row['share_id']]['accepted'] = true;
         }
         foreach ($db->query('SELECT * FROM share_queue ORDER BY requested_at, id') as $row) {
             $shareId = $row['share_id'];
@@ -236,7 +246,7 @@ function seedData(): array {
     }
     if (!function_exists('arrayToDatabase')) {
     function arrayToDatabase(PDO $db, array $data): void {
-        foreach (['share_queue','access_logs','shares','files','folders','users'] as $table) $db->exec("DELETE FROM {$table}");
+        foreach (['share_acceptances','share_queue','access_logs','shares','files','folders','users'] as $table) $db->exec("DELETE FROM {$table}");
         $userStmt = $db->prepare('INSERT INTO users (id,name,email,role,password,quota) VALUES (?,?,?,?,?,?)');
         foreach ($data['users'] as $row) $userStmt->execute([$row['id'],$row['name'],$row['email'],$row['role'],$row['password'],$row['quota']]);
         $folderStmt = $db->prepare('INSERT INTO folders (id,owner_id,name,parent_id,created_at) VALUES (?,?,?,?,?)');
@@ -245,9 +255,13 @@ function seedData(): array {
         foreach ($data['files'] as $row) $fileStmt->execute([$row['id'],$row['owner_id'],$row['folder_id'] ?? 'root-' . $row['owner_id'],$row['original_name'],$row['stored_name'],$row['size'],$row['mime'],$row['created_at'],$row['download_count']]);
         $shareStmt = $db->prepare('INSERT INTO shares (id,file_id,owner_id,recipient_id,expires_at,max_downloads,downloads,password_hash,created_at,revoked_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
         $queueStmt = $db->prepare('INSERT INTO share_queue (id,share_id,user_id,requested_at,status) VALUES (?,?,?,?,?)');
+        $acceptanceStmt = $db->prepare('INSERT INTO share_acceptances (share_id,user_id,accepted_at) VALUES (?,?,?)');
         foreach ($data['shares'] as $row) {
             $shareStmt->execute([$row['id'],$row['file_id'],$row['owner_id'],$row['recipient_id'],$row['expires_at'],$row['max_downloads'],$row['downloads'],$row['password_hash'],$row['created_at'],$row['revoked_at']]);
             foreach ($row['queue'] ?? [] as $entry) $queueStmt->execute([$entry['id'],$row['id'],$entry['user_id'],$entry['requested_at'],$entry['status']]);
+            if (($row['accepted'] ?? ($row['owner_id'] === $row['recipient_id'])) && $row['owner_id'] !== $row['recipient_id']) {
+                $acceptanceStmt->execute([$row['id'], $row['recipient_id'], $row['accepted_at'] ?? $row['created_at']]);
+            }
         }
         $logStmt = $db->prepare('INSERT INTO access_logs (id,at,action,user_id,file_id,success) VALUES (?,?,?,?,?,?)');
         foreach ($data['logs'] as $row) $logStmt->execute([$row['id'],$row['at'],$row['action'],$row['user_id'],$row['file_id'],$row['success'] ? 1 : 0]);
@@ -339,6 +353,9 @@ function userCanDownloadShare(array $user, array $share): bool {
 }
 function isPublicShare(array $share): bool {
     return ($share['recipient_id'] ?? '') === ($share['owner_id'] ?? '');
+}
+function shareIsAccepted(array $share): bool {
+    return isPublicShare($share) || ($share['accepted'] ?? false);
 }
 function normalizeShare(array &$share): void {
     if (!isset($share['queue']) || !is_array($share['queue'])) $share['queue'] = [];

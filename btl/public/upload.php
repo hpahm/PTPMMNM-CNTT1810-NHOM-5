@@ -21,8 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$errors) { flash('Tải tệp thành công.'); redirect('/'); }
     }
 }
-layoutStart('Tải tệp lên'); echo '<section class="panel"><h1>Tải tệp lên</h1>';
+layoutStart('Tải tệp lên'); echo '<section class="panel upload-panel"><h1>Tải tệp lên</h1>';
 foreach ($errors as $error) echo '<div class="flash error">'.h($error).'</div>';
 echo '<p class="muted">Định dạng: PDF, TXT, JPG, PNG, ZIP, DOCX · tối đa 10 MB.</p><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="'.h(csrf()).'"><label>Thư mục<select name="folder_id">';
 foreach ($data['folders'] as $folder) if ($folder['owner_id'] === $user['id']) echo '<option value="'.h($folder['id']).'">'.h($folder['name']).'</option>';
-echo '</select></label><label>Tệp<input type="file" name="file" required></label><button>Tải lên</button></form></section>'; layoutEnd();
+echo '</select></label><label class="drop-zone" id="drop-zone"><span class="drop-icon">⇧</span><strong>Thả file vào đây</strong><small>hoặc bấm để chọn file</small><input type="file" name="file" id="file-input" required></label><div class="upload-name" id="upload-name"></div><button>Tải lên</button></form><script>const zone=document.getElementById("drop-zone"), input=document.getElementById("file-input"), name=document.getElementById("upload-name"); function showFile(file){if(file) name.textContent="Đã chọn: "+file.name;} zone.addEventListener("dragover",e=>{e.preventDefault();zone.classList.add("dragging")}); zone.addEventListener("dragleave",()=>zone.classList.remove("dragging")); zone.addEventListener("drop",e=>{e.preventDefault();zone.classList.remove("dragging");if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;showFile(input.files[0])}}); input.addEventListener("change",()=>showFile(input.files[0]));</script></section>'; layoutEnd();

@@ -11,7 +11,7 @@ if ($folderId !== '') {
 }
 $files = array_filter($data['files'], function(array $file) use ($user, $q, $status, $folderId, $data): bool {
     $visibleShares = array_filter($data['shares'], fn($s) => $s['file_id'] === $file['id'] && $s['revoked_at'] === null && strtotime($s['expires_at']) > time() && $s['downloads'] < $s['max_downloads']);
-    if ($user['role'] !== 'admin' && $file['owner_id'] !== $user['id'] && !in_array($user['id'], array_column($visibleShares, 'recipient_id'), true)) return false;
+    if ($user['role'] !== 'admin' && $file['owner_id'] !== $user['id']) return false;
     if ($q !== '' && !str_contains(strtolower($file['original_name']), $q)) return false;
     if ($folderId !== '' && ($file['folder_id'] ?? 'root') !== $folderId) return false;
     $shares = array_filter($data['shares'], fn($s) => $s['file_id'] === $file['id'] && $s['revoked_at'] === null);
@@ -21,7 +21,7 @@ $files = array_filter($data['files'], function(array $file) use ($user, $q, $sta
 layoutStart($folder ? $folder['name'] : 'Tệp của tôi');
 $heading = $folder ? h($folder['name']) : 'Tệp của tôi';
 $back = $folder ? '<a class="button secondary" href="/folders.php">Quay lại thư mục</a>' : '';
-echo '<div class="content-heading"><div><h1>'.$heading.'</h1><p class="muted">Quản lý và chia sẻ tệp của bạn</p></div>'.$back.'<a class="button" href="/upload.php">+ Tải tệp lên</a></div>';
+echo '<div class="content-heading"><div><h1>'.$heading.'</h1><p class="muted">Quản lý và chia sẻ tệp của bạn</p></div>'.$back.'<a class="button" href="/upload.php">＋ Tải tệp lên</a></div>';
 echo '<div class="toolbar"><form class="filter-form" method="get"><select name="status"><option value="">Tất cả tệp</option><option value="shared" '.($status==='shared'?'selected':'').'>Đang chia sẻ</option><option value="private" '.($status==='private'?'selected':'').'>Riêng tư</option></select><button class="secondary">Lọc</button></form><span class="view-switch active">☷</span><span class="view-switch">▦</span></div>';
 if (!$files) echo '<div class="empty-state"><div class="empty-icon">□</div><h2>Chưa có tệp</h2><p>Tải tệp đầu tiên lên để bắt đầu.</p><a class="button" href="/upload.php">Tải tệp lên</a></div>';
 else echo '<div class="file-table"><div class="file-row file-head"><span>Tên</span><span>Chủ sở hữu</span><span>Ngày tải lên</span><span>Kích thước</span><span></span></div>';

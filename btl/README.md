@@ -49,10 +49,13 @@ xuống ngay trên máy thực hành.
 - Đăng nhập, đăng xuất và phân quyền chủ tệp/người nhận/quản trị.
 - Đăng ký tài khoản mới bằng email Gmail; tài khoản mới có vai trò người nhận.
 - Tạo thư mục, chọn thư mục khi tải tệp và lọc tệp theo thư mục.
+- Kéo thả tệp vào vùng tải lên, xem tiến trình chọn tệp và giao diện thẻ file.
 - Tải tệp, kiểm tra phần mở rộng, MIME, kích thước và quota.
 - Tạo liên kết có hạn dùng, giới hạn lượt tải và mật khẩu tùy chọn.
 - Tạo link công khai để gửi cho bất kỳ ai; link có nút sao chép và vẫn chịu
   hạn dùng, giới hạn lượt tải và mật khẩu tùy chọn.
+- Chia sẻ theo tài khoản có bước xem trước; người nhận phải xác nhận mới lưu
+  file vào mục “Được chia sẻ”, không đưa file vào “Tệp của tôi”.
 - Khi liên kết chỉ còn một lượt tải, các yêu cầu đồng thời được xếp hàng FIFO;
   yêu cầu đến trước được cấp lượt trước, yêu cầu sau nhận trạng thái chờ.
 - Kiểm tra quyền trước khi tải; tệp không nằm dưới `public/`.

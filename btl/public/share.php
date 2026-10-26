@@ -9,8 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($max === false || $max < 1 || $max > 1000) $errors[] = 'Lượt tải phải từ 1 đến 1000.';
     if (!$errors) {
         $shareId = bin2hex(random_bytes(8)); $expires = date(DATE_ATOM, time() + $days * 86400);
-        withStore(function(array &$store) use ($shareId,$fileId,$recipient,$max,$expires,$password,$user,$file): void {
-            $store['shares'][$shareId] = ['id'=>$shareId,'file_id'=>$fileId,'owner_id'=>$file['owner_id'],'recipient_id'=>$recipient,'expires_at'=>$expires,'max_downloads'=>$max,'downloads'=>0,'password_hash'=>$password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null,'created_at'=>date(DATE_ATOM),'revoked_at'=>null,'queue'=>[]];
+        withStore(function(array &$store) use ($shareId,$fileId,$recipient,$max,$expires,$password,$user,$file,$public): void {
+            $store['shares'][$shareId] = ['id'=>$shareId,'file_id'=>$fileId,'owner_id'=>$file['owner_id'],'recipient_id'=>$recipient,'expires_at'=>$expires,'max_downloads'=>$max,'downloads'=>0,'password_hash'=>$password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null,'created_at'=>date(DATE_ATOM),'revoked_at'=>null,'queue'=>[],'accepted'=>$public];
             logEvent($store, 'share_created', $user['id'], $fileId);
         });
         flash('Đã tạo liên kết chia sẻ.'); redirect('/share.php?file='.rawurlencode($fileId));

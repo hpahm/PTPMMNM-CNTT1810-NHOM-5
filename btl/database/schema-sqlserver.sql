@@ -38,6 +38,12 @@ IF OBJECT_ID(N'share_queue', N'U') IS NULL CREATE TABLE share_queue (
     CONSTRAINT FK_queue_share FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
     CONSTRAINT FK_queue_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
+IF OBJECT_ID(N'share_acceptances', N'U') IS NULL CREATE TABLE share_acceptances (
+    share_id NVARCHAR(64) NOT NULL PRIMARY KEY, user_id NVARCHAR(64) NOT NULL,
+    accepted_at NVARCHAR(40) NOT NULL,
+    CONSTRAINT FK_acceptances_share FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
+    CONSTRAINT FK_acceptances_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_files_owner') CREATE INDEX idx_files_owner ON files(owner_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_shares_file') CREATE INDEX idx_shares_file ON shares(file_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_shares_recipient') CREATE INDEX idx_shares_recipient ON shares(recipient_id);
