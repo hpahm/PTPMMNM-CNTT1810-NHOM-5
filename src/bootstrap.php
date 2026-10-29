@@ -1,6 +1,22 @@
 <?php
 declare(strict_types=1);
 
+if (!function_exists('mb_strlen')) {
+    function mb_strlen(string $string, ?string $encoding = null): int {
+        return strlen($string);
+    }
+}
+if (!function_exists('mb_substr')) {
+    function mb_substr(string $string, int $start, ?int $length = null, ?string $encoding = null): string {
+        return $length === null ? substr($string, $start) : substr($string, $start, $length);
+    }
+}
+if (!function_exists('mb_strtoupper')) {
+    function mb_strtoupper(string $string, ?string $encoding = null): string {
+        return strtoupper($string);
+    }
+}
+
 const APP_ROOT = __DIR__ . '/..';
 const DB_FILE = APP_ROOT . '/storage/openshare.sqlite';
 const DB_SERVER = 'DESKTOP-L3KA80E\\SQLEXPRESS';
