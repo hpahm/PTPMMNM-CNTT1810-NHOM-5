@@ -9,10 +9,6 @@ lưu trong CSDL cấu hình (SQLite, MySQL hoặc SQL Server), còn tệp tải 
 
 Sau khi clone repository, chuyển vào thư mục dự án:
 
-```bash
-cd btl
-```
-
 ### Trên Linux / macOS / WSL (Bash)
 
 ```bash
