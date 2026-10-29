@@ -76,6 +76,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
+$storeData = readStore();
+$systemHasAdmin = false;
+foreach ($storeData['users'] as $u) {
+    if (($u['role'] ?? '') === 'admin') {
+        $systemHasAdmin = true;
+        break;
+    }
+}
+
 layoutStart('Đăng ký');
 ?>
 <div class="auth-card">
@@ -94,44 +103,92 @@ layoutStart('Đăng ký');
         <p class="auth-sub">Đăng ký để nhận và chia sẻ tệp có kiểm soát quyền truy cập</p>
     </div>
 
+    <?php if (!$systemHasAdmin): ?>
+        <div class="auth-role-notice">
+            <span>👑</span>
+            <span><strong>Hệ thống chưa có Admin:</strong> Tài khoản đầu tiên đăng ký sẽ được tự động kích hoạt quyền <strong>Quản trị viên</strong>.</span>
+        </div>
+    <?php endif; ?>
+
     <?php foreach ($errors as $err): ?>
         <div class="flash error"><?= h($err) ?></div>
     <?php endforeach; ?>
 
-    <form method="post" class="auth-form" autocomplete="on">
+    <form method="post" class="auth-form" autocomplete="on" id="registerForm">
         <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
 
         <div class="form-group">
-            <label for="name">Họ và tên</label>
-            <input type="text" id="name" name="name" value="<?= h(post('name')) ?>" 
-                   placeholder="Nguyễn Văn A" maxlength="100" required autofocus>
+            <label for="name">
+                <span>Họ và tên</span>
+            </label>
+            <div class="input-with-icon">
+                <span class="input-icon-left">👤</span>
+                <input type="text" id="name" name="name" value="<?= h(post('name')) ?>" 
+                       placeholder="Nguyễn Văn A" maxlength="100" required autofocus>
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="email">Địa chỉ Gmail</label>
-            <input type="email" id="email" name="email" value="<?= h(post('email')) ?>" 
-                   placeholder="tenban@gmail.com" 
-                   pattern="[a-zA-Z0-9._%+\-]+@gmail\.com" 
-                   title="Bắt buộc sử dụng đuôi @gmail.com" required>
+            <label for="email">
+                <span>Địa chỉ Gmail</span>
+                <span class="auth-label-hint">Đuôi @gmail.com</span>
+            </label>
+            <div class="input-with-icon">
+                <span class="input-icon-left">✉️</span>
+                <input type="email" id="email" name="email" value="<?= h(post('email')) ?>" 
+                       placeholder="tenban@gmail.com" 
+                       pattern="[a-zA-Z0-9._%+\-]+@gmail\.com" 
+                       title="Bắt buộc sử dụng đuôi @gmail.com" required>
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="password">Mật khẩu (tối thiểu 6 ký tự)</label>
-            <input type="password" id="password" name="password" minlength="6" placeholder="Nhập mật khẩu" required>
+            <label for="password">
+                <span>Mật khẩu</span>
+                <span class="auth-label-hint">Tối thiểu 6 ký tự</span>
+            </label>
+            <div class="input-with-icon">
+                <span class="input-icon-left">🔒</span>
+                <input type="password" id="password" name="password" minlength="6" placeholder="Tạo mật khẩu an toàn" required>
+                <button type="button" class="btn-toggle-password" onclick="togglePassword('password', this)" title="Hiện/ẩn mật khẩu">👁️</button>
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="confirm_password">Xác nhận mật khẩu</label>
-            <input type="password" id="confirm_password" name="confirm_password" minlength="6" placeholder="Nhập lại mật khẩu" required>
+            <label for="confirm_password">
+                <span>Xác nhận mật khẩu</span>
+            </label>
+            <div class="input-with-icon">
+                <span class="input-icon-left">🔒</span>
+                <input type="password" id="confirm_password" name="confirm_password" minlength="6" placeholder="Nhập lại mật khẩu" required>
+                <button type="button" class="btn-toggle-password" onclick="togglePassword('confirm_password', this)" title="Hiện/ẩn mật khẩu">👁️</button>
+            </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">Đăng ký</button>
+        <button type="submit" class="btn-submit-auth">
+            <span>Tạo tài khoản OpenShare</span>
+            <span>→</span>
+        </button>
     </form>
 
     <div class="auth-card-footer">
         <span>Đã có tài khoản?</span>
-        <a href="/login.php">Đăng nhập</a>
+        <a href="/login.php">Đăng nhập ngay</a>
     </div>
 </div>
+
+<script>
+function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+    } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+    }
+}
+</script>
 
 <?php layoutEnd(); ?>
