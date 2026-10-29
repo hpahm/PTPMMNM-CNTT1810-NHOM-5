@@ -60,6 +60,12 @@ CREATE TABLE access_logs (
     success INTEGER NOT NULL DEFAULT 1 CHECK (success IN (0, 1))
 );
 
+CREATE TABLE share_acceptances (
+    share_id TEXT PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    accepted_at TEXT NOT NULL
+);
+
 CREATE INDEX idx_files_owner ON files(owner_id);
 CREATE INDEX idx_shares_file ON shares(file_id);
 CREATE INDEX idx_shares_recipient ON shares(recipient_id);
