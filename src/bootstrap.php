@@ -28,6 +28,11 @@ function dbDriver(): string {
 
 function startApp(): void {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        $sessionPath = APP_ROOT . '/storage/sessions';
+        if (!is_dir($sessionPath) && !mkdir($sessionPath, 0775, true) && !is_dir($sessionPath)) {
+            throw new RuntimeException('Không thể tạo thư mục lưu session: ' . $sessionPath);
+        }
+        session_save_path($sessionPath);
         session_start();
     }
 }

@@ -9,9 +9,20 @@ $data = readStore();
 
 $pending = [];
 $accepted = [];
+$viewedShareIds = [];
+
+foreach ($data['logs'] as $log) {
+    if (($log['action'] ?? '') === 'share_view' && ($log['user_id'] ?? '') === $user['id']) {
+        $viewedShareIds[$log['file_id'] ?? ''] = true;
+    }
+}
 
 foreach ($data['shares'] as $share) {
-    if ($share['recipient_id'] !== $user['id'] || !validShare($share, time())) {
+    $isRecipientShare = $share['recipient_id'] === $user['id'] && $share['owner_id'] !== $user['id'];
+    $isViewedPublicShare = isPublicShare($share)
+        && $share['owner_id'] !== $user['id']
+        && isset($viewedShareIds[$share['file_id']]);
+    if ((!$isRecipientShare && !$isViewedPublicShare) || !validShare($share, time())) {
         continue;
     }
     $file = $data['files'][$share['file_id']] ?? null;

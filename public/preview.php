@@ -43,6 +43,12 @@ if ((!$access && !($share && $share['password_hash'])) || safeStoredPath($file) 
     exit($error !== '' ? $error : 'Tệp không còn tồn tại trên máy chủ.');
 }
 
+if ($access && $user && $share && $share['owner_id'] !== $user['id']) {
+    withStore(function (array &$store) use ($user, $share): void {
+        logEvent($store, 'share_view', $user['id'], $share['file_id']);
+    });
+}
+
 $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
 $previewable = in_array($ext, ['pdf', 'txt', 'jpg', 'jpeg', 'png'], true);
 $pendingAcceptance = $user && $share && !isPublicShare($share) && $share['recipient_id'] === $user['id'] && !shareIsAccepted($share);

@@ -86,7 +86,7 @@ layoutStart($pageTitle);
             
             <div class="filter-pill-group">
                 <a href="/?<?= http_build_query(array_filter(['folder' => $folderId, 'q' => $q])) ?>" 
-                   class="filter-pill <?= $status === '' ? 'active' : '' ?>">Tất cả tệp (<?= count($data['files']) ?>)</a>
+                   class="filter-pill <?= $status === '' ? 'active' : '' ?>">Tất cả tệp (<?= count($files) ?>)</a>
                 <a href="/?<?= http_build_query(array_filter(['status' => 'shared', 'folder' => $folderId, 'q' => $q])) ?>" 
                    class="filter-pill <?= $status === 'shared' ? 'active' : '' ?>">Đang chia sẻ</a>
                 <a href="/?<?= http_build_query(array_filter(['status' => 'private', 'folder' => $folderId, 'q' => $q])) ?>" 
