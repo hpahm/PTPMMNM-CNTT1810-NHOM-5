@@ -700,7 +700,9 @@ function layoutStart(string $title): void {
     echo '<link rel="preconnect" href="https://fonts.googleapis.com">';
     echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
     echo '<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">';
-    echo '<link rel="stylesheet" href="/assets/app.css">';
+    $cssFile = __DIR__ . '/../public/assets/app.css';
+    $cssVer = file_exists($cssFile) ? (string)filemtime($cssFile) : '2.0';
+    echo '<link rel="stylesheet" href="/assets/app.css?v=' . $cssVer . '">';
     echo '</head><body>';
 
     if ($user) {
