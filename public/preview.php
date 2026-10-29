@@ -23,14 +23,22 @@ if ($user && userCanManageFile($user, $file)) {
     $access = false;
     $error = 'Bạn không có quyền xem tệp này hoặc liên kết đã hết hiệu lực / hết lượt tải.';
 } else {
+    $rateKey = 'share_pw_' . ($share['id'] ?? '');
     $access = !$share['password_hash'] || (($share['id'] ?? '') !== '' && ($_SESSION['preview_access'][$share['id']] ?? 0) > time());
     if (!$access && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         verifyCsrf();
-        $access = password_verify(post('password'), $share['password_hash']);
-        if ($access) {
-            $_SESSION['preview_access'][$share['id']] = time() + 900;
+        if (isRateLimited($rateKey, 5, 300)) {
+            $rem = getRateLimitRemainingSeconds($rateKey, 300);
+            $error = "Bạn đã nhập sai mật khẩu quá nhiều lần. Vui lòng thử lại sau {$rem} giây.";
         } else {
-            $error = 'Mật khẩu truy cập không chính xác.';
+            $access = password_verify(post('password'), $share['password_hash']);
+            if ($access) {
+                $_SESSION['preview_access'][$share['id']] = time() + 900;
+                clearRateLimit($rateKey);
+            } else {
+                recordFailedAttempt($rateKey);
+                $error = 'Mật khẩu truy cập không chính xác.';
+            }
         }
     }
     if (!$access && $error === '') {
@@ -51,7 +59,7 @@ if ($access && $user && $share && $share['owner_id'] !== $user['id']) {
 
 $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
 $previewable = in_array($ext, ['pdf', 'txt', 'jpg', 'jpeg', 'png'], true);
-$pendingAcceptance = $user && $share && !isPublicShare($share) && $share['recipient_id'] === $user['id'] && !shareIsAccepted($share);
+$pendingAcceptance = $user && $share && $share['owner_id'] !== $user['id'] && !isShareAcceptedByUser($share, $user['id']);
 $downloadQuery = $share ? '?share=' . rawurlencode($share['id']) : '?file=' . rawurlencode($fileId);
 $contentQuery = '?file=' . rawurlencode($fileId) . ($share ? '&share=' . rawurlencode($share['id']) : '');
 

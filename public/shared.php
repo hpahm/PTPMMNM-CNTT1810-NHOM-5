@@ -6,32 +6,26 @@ startApp();
 
 $user = requireLogin();
 $data = readStore();
+$now = time();
 
 $pending = [];
 $accepted = [];
-$viewedShareIds = [];
-
-foreach ($data['logs'] as $log) {
-    if (($log['action'] ?? '') === 'share_view' && ($log['user_id'] ?? '') === $user['id']) {
-        $viewedShareIds[$log['file_id'] ?? ''] = true;
-    }
-}
 
 foreach ($data['shares'] as $share) {
-    $isRecipientShare = $share['recipient_id'] === $user['id'] && $share['owner_id'] !== $user['id'];
-    $isViewedPublicShare = isPublicShare($share)
-        && $share['owner_id'] !== $user['id']
-        && isset($viewedShareIds[$share['file_id']]);
-    if ((!$isRecipientShare && !$isViewedPublicShare) || !validShare($share, time())) {
+    if (!validShare($share, $now) || ($share['owner_id'] ?? '') === $user['id']) {
         continue;
     }
     $file = $data['files'][$share['file_id']] ?? null;
     if (!$file) {
         continue;
     }
-    if (shareIsAccepted($share)) {
+
+    $isDirectRecipient = ($share['recipient_id'] ?? '') === $user['id'];
+    $hasAccepted = isShareAcceptedByUser($share, $user['id']);
+
+    if ($hasAccepted) {
         $accepted[] = [$share, $file];
-    } else {
+    } elseif ($isDirectRecipient) {
         $pending[] = [$share, $file];
     }
 }
@@ -43,41 +37,75 @@ layoutStart('Được chia sẻ với tôi');
     <div class="page-header-bar">
         <div>
             <h2>Được chia sẻ với tôi</h2>
-            <p class="text-muted">Các tệp người dùng khác đã cấp quyền chia sẻ cho tài khoản của bạn</p>
+            <p class="text-muted">Các tệp và lời mời truy cập được người dùng khác chia sẻ trực tiếp cho bạn</p>
         </div>
     </div>
 
-    <!-- Mục chờ xác nhận -->
+    <!-- Mục lời mời đang chờ xác nhận -->
     <?php if (!empty($pending)): ?>
-        <div class="shared-section card mb-4">
-            <div class="card-header">
-                <h3>Đang chờ bạn xác nhận (<?= count($pending) ?>)</h3>
-                <p class="text-muted">Mở xem trước tệp để kiểm tra và xác nhận lưu vào danh sách của bạn</p>
+        <div class="shared-section card mb-4" style="border: 1px solid #c2e7ff; background: #fafcff;">
+            <div class="card-header" style="border-bottom: 1px solid #e8f0fe;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h3 style="color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
+                            <span>📬</span> Lời mời chia sẻ mới (<?= count($pending) ?>)
+                        </h3>
+                        <p class="text-muted" style="margin-top: 4px;">Bạn nhận được lời mời chia sẻ tệp. Hãy chọn Chấp nhận để lưu vào Drive của bạn hoặc Từ chối.</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="drive-grid">
+            <div class="drive-grid" style="padding: 16px;">
                 <?php foreach ($pending as [$share, $file]): 
                     $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-                    $owner = $data['users'][$file['owner_id']]['name'] ?? 'Chủ tệp';
+                    $ownerUser = $data['users'][$file['owner_id']] ?? null;
+                    $ownerName = $ownerUser['name'] ?? 'Chủ tệp';
+                    $ownerEmail = $ownerUser['email'] ?? '';
+                    $remaining = (int)$share['max_downloads'] - (int)$share['downloads'];
                 ?>
-                <div class="drive-card card-pending">
-                    <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="card-preview-area">
-                        <div class="card-file-type badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></div>
-                        <div class="card-preview-symbol">📬</div>
-                    </a>
-                    <div class="card-body">
-                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="card-title" title="<?= h($file['original_name']) ?>">
-                            <?= h($file['original_name']) ?>
-                        </a>
-                        <div class="card-meta">
-                            <span>Từ: <strong><?= h($owner) ?></strong></span> · 
-                            <span><?= formatBytes((int)$file['size']) ?></span>
+                <div class="invitation-card-item">
+                    <div class="invitation-card-top">
+                        <div class="card-file-type badge-<?= h($ext) ?>" style="font-size: 11px; padding: 6px 10px; border-radius: 6px;">
+                            <?= h(strtoupper(substr($ext, 0, 4))) ?>
+                        </div>
+                        <div class="invitation-card-info">
+                            <span class="invitation-file-name" title="<?= h($file['original_name']) ?>">
+                                <?= h($file['original_name']) ?>
+                            </span>
+                            <div class="invitation-from-text">
+                                Từ: <strong><?= h($ownerName) ?></strong>
+                                <?php if ($ownerEmail !== ''): ?>
+                                    <span style="color: var(--color-text-muted);">(<?= h($ownerEmail) ?>)</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-footer">
-                        <span class="badge-status status-waiting">Chờ xác nhận</span>
-                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn btn-sm btn-primary">
-                            Xem & Lưu
+
+                    <div class="invitation-card-meta">
+                        <span>📦 <?= formatBytes((int)$file['size']) ?></span>
+                        <span>⏳ Hết hạn: <?= h(date('d/m/Y', strtotime($share['expires_at']))) ?></span>
+                        <span>⇩ Còn <?= $remaining ?> lượt</span>
+                    </div>
+
+                    <div class="invitation-actions">
+                        <form method="post" action="/accept-share.php" style="display:inline; margin: 0;">
+                            <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+                            <input type="hidden" name="share" value="<?= h($share['id']) ?>">
+                            <button type="submit" class="btn btn-sm btn-success" title="Chấp nhận và lưu vào Drive của tôi">
+                                <span>✓</span> Chấp nhận
+                            </button>
+                        </form>
+
+                        <form method="post" action="/decline-share.php" onsubmit="return confirm('Bạn có chắc muốn từ chối lời mời chia sẻ này không?');" style="display:inline; margin: 0;">
+                            <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+                            <input type="hidden" name="share" value="<?= h($share['id']) ?>">
+                            <button type="submit" class="btn btn-sm btn-outline" title="Từ chối lời mời">
+                                <span>✕</span> Từ chối
+                            </button>
+                        </form>
+
+                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn btn-sm btn-outline" style="margin-left: auto;" title="Xem trước nội dung tệp">
+                            <span>👁</span> Xem
                         </a>
                     </div>
                 </div>
@@ -97,7 +125,7 @@ layoutStart('Được chia sẻ với tôi');
             <div class="empty-state-card small">
                 <div class="empty-icon-circle">👥</div>
                 <h3>Chưa có tệp nào được lưu</h3>
-                <p class="text-muted">Khi có ai đó chia sẻ tệp cho bạn và bạn xác nhận lưu, tệp sẽ hiển thị ở đây.</p>
+                <p class="text-muted">Khi có ai đó chia sẻ tệp cho email của bạn và bạn bấm Chấp nhận, tệp sẽ xuất hiện tại đây.</p>
             </div>
         <?php else: ?>
             <div class="table-responsive">
@@ -115,7 +143,9 @@ layoutStart('Được chia sẻ với tôi');
                     <tbody>
                         <?php foreach ($accepted as [$share, $file]): 
                             $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-                            $owner = $data['users'][$file['owner_id']]['name'] ?? 'Chủ sở hữu';
+                            $ownerUser = $data['users'][$file['owner_id']] ?? null;
+                            $owner = $ownerUser['name'] ?? 'Chủ sở hữu';
+                            $ownerEmail = $ownerUser['email'] ?? '';
                             $remaining = (int)$share['max_downloads'] - (int)$share['downloads'];
                         ?>
                         <tr>
@@ -125,7 +155,11 @@ layoutStart('Được chia sẻ với tôi');
                                     <span class="file-name-text"><?= h($file['original_name']) ?></span>
                                 </a>
                             </td>
-                            <td><span class="owner-pill"><?= h($owner) ?></span></td>
+                            <td>
+                                <span class="owner-pill" title="<?= h($ownerEmail) ?>">
+                                    <?= h($owner) ?>
+                                </span>
+                            </td>
                             <td><?= formatBytes((int)$file['size']) ?></td>
                             <td><strong><?= $remaining ?></strong> lượt</td>
                             <td><?= h(date('d/m/Y H:i', strtotime($share['expires_at']))) ?></td>

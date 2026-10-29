@@ -39,8 +39,9 @@ IF OBJECT_ID(N'share_queue', N'U') IS NULL CREATE TABLE share_queue (
     CONSTRAINT FK_queue_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 IF OBJECT_ID(N'share_acceptances', N'U') IS NULL CREATE TABLE share_acceptances (
-    share_id NVARCHAR(64) NOT NULL PRIMARY KEY, user_id NVARCHAR(64) NOT NULL,
+    share_id NVARCHAR(64) NOT NULL, user_id NVARCHAR(64) NOT NULL,
     accepted_at NVARCHAR(40) NOT NULL,
+    PRIMARY KEY (share_id, user_id),
     CONSTRAINT FK_acceptances_share FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
     CONSTRAINT FK_acceptances_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

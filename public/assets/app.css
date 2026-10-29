@@ -1528,3 +1528,139 @@ button, input, select, textarea {
         display: none;
     }
 }
+
+/* ---------------- Lời mời chia sẻ (Invitations & Badges) ---------------- */
+.nav-badge-alert {
+    background-color: var(--color-danger);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    margin-left: auto;
+    line-height: 1.2;
+}
+
+.topbar-invite-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+    text-decoration: none;
+    transition: background 0.2s, transform 0.15s;
+    margin-right: 4px;
+}
+.topbar-invite-btn:hover {
+    background-color: #fad2cf;
+    transform: scale(1.05);
+}
+.invite-bell-icon {
+    font-size: 18px;
+}
+.invite-bell-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+}
+
+.invitation-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #e8f0fe 0%, #fef7e0 100%);
+    border: 1px solid #c2e7ff;
+    border-radius: var(--radius-md);
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+}
+.invitation-banner-text {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--color-text-main);
+}
+.invitation-banner-icon {
+    font-size: 24px;
+}
+
+.invitation-card-item {
+    background: #ffffff;
+    border: 1px solid #d2e3fc;
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(26,115,232,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.invitation-card-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+.invitation-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.invitation-card-info {
+    flex: 1;
+    min-width: 0;
+}
+.invitation-file-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--color-text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+.invitation-from-text {
+    font-size: 12px;
+    color: var(--color-text-sub);
+    margin-top: 2px;
+}
+.invitation-card-meta {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: #f8fafd;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+.invitation-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+}
+.btn-success {
+    background-color: var(--color-success);
+    color: #ffffff;
+    border: 1px solid var(--color-success);
+}
+.btn-success:hover {
+    background-color: #137333;
+}
+

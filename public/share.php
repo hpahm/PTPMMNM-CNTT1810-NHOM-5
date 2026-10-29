@@ -18,13 +18,27 @@ $errors = [];
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verifyCsrf();
     $public = post('access') === 'public';
-    $recipient = $public ? $user['id'] : post('recipient');
+    $recipientEmail = strtolower(post('recipient_email'));
     $days = filter_var(post('days'), FILTER_VALIDATE_INT);
     $max = filter_var(post('max_downloads'), FILTER_VALIDATE_INT);
     $password = post('password');
+    $recipientId = $user['id'];
 
-    if (!$public && (!isset($data['users'][$recipient]) || $data['users'][$recipient]['role'] === 'admin')) {
-        $errors[] = 'Vui lòng chọn tài khoản người nhận hợp lệ.';
+    if (!$public) {
+        if (!isGmailAddress($recipientEmail)) {
+            $errors[] = 'Email người nhận phải là tài khoản Gmail hợp lệ (@gmail.com).';
+        } elseif ($recipientEmail === strtolower((string)$user['email'])) {
+            $errors[] = 'Không thể chia sẻ tệp cho chính tài khoản của bạn.';
+        } else {
+            $recipientUser = findUserByEmail($data, $recipientEmail);
+            if (!$recipientUser) {
+                $errors[] = 'Không tìm thấy tài khoản với email "' . $recipientEmail . '". Người nhận cần đăng ký tài khoản OpenShare trước.';
+            } elseif ($recipientUser['role'] === 'admin') {
+                $errors[] = 'Không thể tạo liên kết riêng cho tài khoản Quản trị viên.';
+            } else {
+                $recipientId = $recipientUser['id'];
+            }
+        }
     }
     if ($days === false || $days < 1 || $days > 365) {
         $errors[] = 'Hạn dùng liên kết phải từ 1 đến 365 ngày.';
@@ -37,12 +51,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $shareId = bin2hex(random_bytes(8));
         $expires = date(DATE_ATOM, time() + $days * 86400);
 
-        withStore(function (array &$store) use ($shareId, $fileId, $recipient, $max, $expires, $password, $user, $file, $public): void {
+        withStore(function (array &$store) use ($shareId, $fileId, $recipientId, $max, $expires, $password, $user, $file, $public): void {
             $store['shares'][$shareId] = [
                 'id' => $shareId,
                 'file_id' => $fileId,
                 'owner_id' => $file['owner_id'],
-                'recipient_id' => $recipient,
+                'recipient_id' => $recipientId,
                 'expires_at' => $expires,
                 'max_downloads' => $max,
                 'downloads' => 0,
@@ -50,7 +64,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'created_at' => date(DATE_ATOM),
                 'revoked_at' => null,
                 'queue' => [],
-                'accepted' => $public
+                'acceptances' => [],
+                'accepted' => false
             ];
             logEvent($store, 'share_created', $user['id'], $fileId);
         });
@@ -104,20 +119,11 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
             </div>
 
             <div class="form-group" id="recipient-field" style="display:none;">
-                <label for="recipient-select">Chọn người nhận</label>
-                <select name="recipient" id="recipient-select" class="form-control" disabled>
-                    <?php 
-                    foreach ($data['users'] as $cand): 
-                        if ($cand['id'] !== $user['id'] && $cand['role'] !== 'admin'):
-                    ?>
-                        <option value="<?= h($cand['id']) ?>">
-                            <?= h($cand['name']) ?> (<?= h($cand['email']) ?>)
-                        </option>
-                    <?php 
-                        endif;
-                    endforeach; 
-                    ?>
-                </select>
+                <label for="recipient-email">Địa chỉ Gmail người nhận</label>
+                <input type="email" name="recipient_email" id="recipient-email" class="form-control" placeholder="nguoinhan@gmail.com" disabled>
+                <small class="form-text text-muted" style="display:block; margin-top: 4px; font-size: 12px; color: var(--color-text-muted);">
+                    Hệ thống sẽ gửi lời mời trực tiếp đến tài khoản người nhận này (bảo vệ quyền riêng tư, không hiển thị danh sách người dùng).
+                </small>
             </div>
 
             <div class="form-row">
@@ -227,13 +233,16 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
 <script>
 const accessSelect = document.getElementById('share-access');
 const recipientField = document.getElementById('recipient-field');
-const recipientSelect = document.getElementById('recipient-select');
+const recipientInput = document.getElementById('recipient-email');
 
 function updateRecipientVisibility() {
     const isSpecific = accessSelect.value === 'recipient';
     recipientField.style.display = isSpecific ? 'block' : 'none';
-    recipientSelect.disabled = !isSpecific;
-    recipientSelect.required = isSpecific;
+    recipientInput.disabled = !isSpecific;
+    recipientInput.required = isSpecific;
+    if (isSpecific) {
+        recipientInput.focus();
+    }
 }
 
 accessSelect.addEventListener('change', updateRecipientVisibility);

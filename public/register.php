@@ -38,13 +38,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 
     if (!$errors) {
+        $hasAdmin = false;
+        foreach ($data['users'] as $u) {
+            if (($u['role'] ?? '') === 'admin') {
+                $hasAdmin = true;
+                break;
+            }
+        }
+        $assignedRole = !$hasAdmin ? 'admin' : 'recipient';
+
         $id = bin2hex(random_bytes(8));
-        withStore(function (array &$store) use ($id, $name, $email, $password): void {
+        withStore(function (array &$store) use ($id, $name, $email, $password, $assignedRole): void {
             $store['users'][$id] = [
                 'id' => $id,
                 'name' => $name,
                 'email' => $email,
-                'role' => 'recipient',
+                'role' => $assignedRole,
                 'password' => password_hash($password, PASSWORD_DEFAULT),
                 'quota' => USER_QUOTA_BYTES,
             ];
@@ -58,7 +67,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             logEvent($store, 'register', $id);
         });
 
-        flash('Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.');
+        if ($assignedRole === 'admin') {
+            flash('Đăng ký tài khoản Quản trị viên thành công! Bạn có thể đăng nhập ngay.');
+        } else {
+            flash('Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.');
+        }
         redirect('/login.php');
     }
 }

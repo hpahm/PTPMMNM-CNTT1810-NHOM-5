@@ -11,21 +11,32 @@ if (currentUser()) {
 $error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verifyCsrf();
-    $email = strtolower(post('email'));
-    $password = post('password');
-    $data = readStore();
-
-    if (!isGmailAddress($email)) {
-        $error = 'Chỉ chấp nhận tài khoản có đuôi @gmail.com.';
+    if (isRateLimited('login', 5, 300)) {
+        $remaining = getRateLimitRemainingSeconds('login', 300);
+        $error = "Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau {$remaining} giây.";
     } else {
-        foreach ($data['users'] as $user) {
-            if ($user['email'] === $email && password_verify($password, $user['password'])) {
-                session_regenerate_id(true);
-                $_SESSION['user_id'] = $user['id'];
-                redirect('/');
+        $email = strtolower(post('email'));
+        $password = post('password');
+        $data = readStore();
+
+        if (!isGmailAddress($email)) {
+            $error = 'Chỉ chấp nhận tài khoản có đuôi @gmail.com.';
+        } else {
+            $loggedIn = false;
+            foreach ($data['users'] as $user) {
+                if ($user['email'] === $email && password_verify($password, $user['password'])) {
+                    session_regenerate_id(true);
+                    $_SESSION['user_id'] = $user['id'];
+                    clearRateLimit('login');
+                    $loggedIn = true;
+                    redirect('/');
+                }
+            }
+            if (!$loggedIn) {
+                recordFailedAttempt('login');
+                $error = 'Email hoặc mật khẩu không chính xác.';
             }
         }
-        $error = 'Email hoặc mật khẩu không chính xác.';
     }
 }
 
@@ -75,7 +86,6 @@ layoutStart('Đăng nhập');
         <div class="demo-chips">
             <button type="button" class="chip" onclick="fillDemo('owner@gmail.com')">Chủ tệp (owner)</button>
             <button type="button" class="chip" onclick="fillDemo('recipient@gmail.com')">Người nhận (recipient)</button>
-            <button type="button" class="chip" onclick="fillDemo('admin@gmail.com')">Quản trị (admin)</button>
         </div>
     </div>
 

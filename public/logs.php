@@ -28,6 +28,7 @@ function translateAction(string $action): string {
         'share_created' => '🔗 Tạo liên kết chia sẻ',
         'share_revoked' => '🚫 Thu hồi liên kết',
         'share_accepted' => '✓ Xác nhận lưu tệp',
+        'share_declined' => '✕ Từ chối lời mời',
         'file_deleted' => '🗑 Xóa tệp',
         'expired_file_deleted' => '🧹 Dọn tệp hết hạn',
         'folder_created' => '📁 Tạo thư mục',

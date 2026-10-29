@@ -81,9 +81,10 @@ CREATE TABLE IF NOT EXISTS access_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS share_acceptances (
-    share_id VARCHAR(64) NOT NULL PRIMARY KEY,
+    share_id VARCHAR(64) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
     accepted_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY (share_id, user_id),
     CONSTRAINT share_acceptances_share_fk FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
     CONSTRAINT share_acceptances_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

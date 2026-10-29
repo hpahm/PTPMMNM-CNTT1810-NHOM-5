@@ -48,6 +48,22 @@ layoutStart($pageTitle);
 ?>
 
 <div class="drive-container">
+    <?php 
+    $pendingInvites = countPendingInvitations($data, $user['id']);
+    if ($pendingInvites > 0): 
+    ?>
+        <div class="invitation-banner">
+            <div class="invitation-banner-text">
+                <span class="invitation-banner-icon">📬</span>
+                <div>
+                    <strong>Bạn có <?= $pendingInvites ?> lời mời chia sẻ tệp mới!</strong>
+                    <span style="display:block; color: var(--color-text-sub); font-size: 13px;">Người dùng khác đã chia sẻ tệp cho bạn. Vui lòng kiểm tra và xác nhận lưu vào danh sách của bạn.</span>
+                </div>
+            </div>
+            <a href="/shared.php" class="btn btn-sm btn-primary">Xem lời mời ngay ›</a>
+        </div>
+    <?php endif; ?>
+
     <!-- Breadcrumb & Header -->
     <div class="drive-header-bar">
         <div class="breadcrumb-trail">

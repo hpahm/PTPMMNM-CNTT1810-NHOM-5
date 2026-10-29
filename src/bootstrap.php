@@ -7,7 +7,7 @@ const DB_SERVER = 'DESKTOP-L3KA80E\\SQLEXPRESS';
 const DB_NAME = 'OpenShare';
 const FILE_ROOT = APP_ROOT . '/storage/files';
 const MAX_FILE_BYTES = 10_000_000;
-const USER_QUOTA_BYTES = 50_000_000;
+const USER_QUOTA_BYTES = 1_073_741_824; // 1 GB (1024 * 1024 * 1024 bytes)
 const ALLOWED_MIME_TYPES = [
     'pdf' => ['application/pdf'],
     'txt' => ['text/plain'],
@@ -32,8 +32,23 @@ function startApp(): void {
         if (!is_dir($sessionPath) && !mkdir($sessionPath, 0775, true) && !is_dir($sessionPath)) {
             throw new RuntimeException('Không thể tạo thư mục lưu session: ' . $sessionPath);
         }
+        ini_set('session.use_strict_mode', '1');
+        $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
         session_save_path($sessionPath);
         session_start();
+    }
+    if (!headers_sent()) {
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
     }
 }
 
@@ -203,9 +218,10 @@ CREATE TABLE IF NOT EXISTS access_logs (
     user_id TEXT NOT NULL, file_id TEXT, success INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS share_acceptances (
-    share_id TEXT PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
+    share_id TEXT NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    accepted_at TEXT NOT NULL
+    accepted_at TEXT NOT NULL,
+    PRIMARY KEY (share_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner_id);
 CREATE INDEX IF NOT EXISTS idx_shares_file ON shares(file_id);
@@ -223,12 +239,16 @@ function databaseToArray(PDO $db): array {
     }
     foreach ($db->query('SELECT * FROM shares') as $row) {
         $row['queue'] = [];
+        $row['acceptances'] = [];
         $row['accepted'] = ($row['owner_id'] === $row['recipient_id']);
         $data['shares'][$row['id']] = $row;
     }
-    foreach ($db->query('SELECT share_id FROM share_acceptances') as $row) {
-        if (isset($data['shares'][$row['share_id']])) {
-            $data['shares'][$row['share_id']]['accepted'] = true;
+    foreach ($db->query('SELECT * FROM share_acceptances') as $row) {
+        $shareId = $row['share_id'];
+        $uId = $row['user_id'];
+        if (isset($data['shares'][$shareId])) {
+            $data['shares'][$shareId]['acceptances'][$uId] = $row['accepted_at'];
+            $data['shares'][$shareId]['accepted'] = true;
         }
     }
     foreach ($db->query('SELECT * FROM share_queue ORDER BY requested_at, id') as $row) {
@@ -270,7 +290,11 @@ function arrayToDatabase(PDO $db, array $data): void {
         foreach ($row['queue'] ?? [] as $entry) {
             $queueStmt->execute([$entry['id'],$row['id'],$entry['user_id'],$entry['requested_at'],$entry['status']]);
         }
-        if (($row['accepted'] ?? ($row['owner_id'] === $row['recipient_id'])) && $row['owner_id'] !== $row['recipient_id']) {
+        if (!empty($row['acceptances']) && is_array($row['acceptances'])) {
+            foreach ($row['acceptances'] as $uId => $accAt) {
+                $acceptanceStmt->execute([$row['id'], $uId, is_string($accAt) ? $accAt : date(DATE_ATOM)]);
+            }
+        } elseif (($row['accepted'] ?? ($row['owner_id'] === $row['recipient_id'])) && $row['owner_id'] !== $row['recipient_id']) {
             $acceptanceStmt->execute([$row['id'], $row['recipient_id'], $row['accepted_at'] ?? $row['created_at']]);
         }
     }
@@ -282,16 +306,13 @@ function arrayToDatabase(PDO $db, array $data): void {
 
 function seedData(): array {
     $password = password_hash('123', PASSWORD_DEFAULT);
-    $adminPassword = password_hash('123', PASSWORD_DEFAULT);
     $users = [
         'owner'=>['id'=>'owner','name'=>'Chủ tệp','email'=>'owner@gmail.com','role'=>'owner','password'=>$password,'quota'=>USER_QUOTA_BYTES],
         'recipient'=>['id'=>'recipient','name'=>'Người nhận','email'=>'recipient@gmail.com','role'=>'recipient','password'=>$password,'quota'=>USER_QUOTA_BYTES],
-        'admin'=>['id'=>'admin','name'=>'Quản trị viên','email'=>'admin@gmail.com','role'=>'admin','password'=>$adminPassword,'quota'=>USER_QUOTA_BYTES],
     ];
     $folders = [
         'root-owner'=>['id'=>'root-owner','owner_id'=>'owner','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)],
         'root-recipient'=>['id'=>'root-recipient','owner_id'=>'recipient','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)],
-        'root-admin'=>['id'=>'root-admin','owner_id'=>'admin','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)],
     ];
     $extensions = ['pdf', 'txt', 'jpg', 'png', 'zip', 'docx'];
     $files = [];
@@ -439,12 +460,88 @@ function userCanDownloadShare(?array $user, array $share): bool {
     return ($user['role'] ?? '') === 'admin' || ($share['recipient_id'] ?? '') === ($user['id'] ?? '');
 }
 
+function findUserByEmail(array $data, string $email): ?array {
+    $needle = strtolower(trim($email));
+    if ($needle === '') return null;
+    foreach ($data['users'] as $u) {
+        if (strtolower((string)($u['email'] ?? '')) === $needle) {
+            return $u;
+        }
+    }
+    return null;
+}
+
 function isPublicShare(array $share): bool {
     return ($share['recipient_id'] ?? '') === ($share['owner_id'] ?? '');
 }
 
-function shareIsAccepted(array $share): bool {
+function isShareAcceptedByUser(array $share, string $userId): bool {
+    if (isset($share['acceptances'][$userId])) {
+        return true;
+    }
+    if (($share['recipient_id'] ?? '') === $userId && !empty($share['accepted'])) {
+        return true;
+    }
+    return false;
+}
+
+function shareIsAccepted(array $share, ?string $userId = null): bool {
+    if ($userId !== null) {
+        return isShareAcceptedByUser($share, $userId);
+    }
     return isPublicShare($share) || ($share['accepted'] ?? false);
+}
+
+function getPendingInvitations(array $data, string $userId): array {
+    $pending = [];
+    $now = time();
+    foreach ($data['shares'] as $share) {
+        if (($share['recipient_id'] ?? '') === $userId && ($share['owner_id'] ?? '') !== $userId) {
+            if (validShare($share, $now) && !isShareAcceptedByUser($share, $userId)) {
+                $file = $data['files'][$share['file_id']] ?? null;
+                if ($file) {
+                    $pending[] = [$share, $file];
+                }
+            }
+        }
+    }
+    return $pending;
+}
+
+function countPendingInvitations(array $data, string $userId): int {
+    return count(getPendingInvitations($data, $userId));
+}
+
+function isRateLimited(string $action, int $maxAttempts = 5, int $decaySeconds = 300): bool {
+    $key = 'rate_limit_' . $action;
+    $record = $_SESSION[$key] ?? null;
+    if (!is_array($record)) return false;
+    $now = time();
+    if ($now - ($record['start'] ?? 0) > $decaySeconds) {
+        unset($_SESSION[$key]);
+        return false;
+    }
+    return ($record['count'] ?? 0) >= $maxAttempts;
+}
+
+function recordFailedAttempt(string $action): void {
+    $key = 'rate_limit_' . $action;
+    $now = time();
+    if (!isset($_SESSION[$key]) || ($now - ($_SESSION[$key]['start'] ?? 0) > 300)) {
+        $_SESSION[$key] = ['count' => 1, 'start' => $now];
+    } else {
+        $_SESSION[$key]['count'] = ((int)$_SESSION[$key]['count']) + 1;
+    }
+}
+
+function clearRateLimit(string $action): void {
+    unset($_SESSION['rate_limit_' . $action]);
+}
+
+function getRateLimitRemainingSeconds(string $action, int $decaySeconds = 300): int {
+    $key = 'rate_limit_' . $action;
+    $start = (int)($_SESSION[$key]['start'] ?? time());
+    return max(1, $decaySeconds - (time() - $start));
 }
 
 function normalizeShare(array &$share): void {
@@ -537,6 +634,7 @@ function layoutStart(string $title): void {
         $usedBytes = userUsage($data, $user['id']);
         $quotaBytes = (int)($user['quota'] ?? USER_QUOTA_BYTES);
         $usedPercent = $quotaBytes > 0 ? min(100, round(($usedBytes / $quotaBytes) * 100)) : 0;
+        $pendingInvites = countPendingInvitations($data, $user['id']);
         $roleName = match($user['role'] ?? '') {
             'owner' => 'Chủ tệp',
             'admin' => 'Quản trị viên',
@@ -580,6 +678,12 @@ function layoutStart(string $title): void {
         echo '  </form>';
 
         echo '  <div class="topbar-right">';
+        if ($pendingInvites > 0) {
+            echo '    <a href="/shared.php" class="topbar-invite-btn" title="' . $pendingInvites . ' lời mời chia sẻ tệp đang chờ bạn">';
+            echo '      <span class="invite-bell-icon">📬</span>';
+            echo '      <span class="invite-bell-badge">' . $pendingInvites . '</span>';
+            echo '    </a>';
+        }
         echo '    <a href="/report.php" class="topbar-quota-badge" title="Dung lượng đã dùng">';
         echo '      <span class="quota-icon">☁</span>';
         echo '      <span>' . formatBytes($usedBytes) . ' / ' . formatBytes($quotaBytes) . '</span>';
@@ -614,7 +718,8 @@ function layoutStart(string $title): void {
         echo '    </div>';
         echo '    <nav class="sidebar-nav">';
         echo '      <a href="/"' . $navClass($isHome) . '><span class="nav-icon">📁</span><span>Drive của tôi</span></a>';
-        echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">👥</span><span>Được chia sẻ với tôi</span></a>';
+        $inviteBadgeHtml = $pendingInvites > 0 ? ' <span class="nav-badge-alert">' . $pendingInvites . '</span>' : '';
+        echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">👥</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
         echo '      <a href="/folders.php"' . $navClass($isFolders) . '><span class="nav-icon">📂</span><span>Thư mục</span></a>';
         echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">⏱</span><span>Hoạt động</span></a>';
         echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">📊</span><span>Bộ nhớ lưu trữ</span></a>';

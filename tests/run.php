@@ -20,6 +20,12 @@ $share['downloads'] = 1; check(!validShare($share,time()), 'Từ chối vượt 
 $share['downloads'] = 0; $share['expires_at'] = date(DATE_ATOM,time()-1); check(!validShare($share,time()), 'Từ chối liên kết hết hạn');
 $share['expires_at'] = date(DATE_ATOM,time()+60); $share['revoked_at'] = date(DATE_ATOM); check(!validShare($share,time()), 'Từ chối liên kết đã thu hồi');
 withStore(function(array &$store): void {
+    if (!isset($store['users']['admin'])) {
+        $store['users']['admin'] = [
+            'id' => 'admin', 'name' => 'Admin Test', 'email' => 'admintest@gmail.com',
+            'role' => 'admin', 'password' => 'test', 'quota' => USER_QUOTA_BYTES
+        ];
+    }
     $store['files']['f1'] = ['id'=>'f1','owner_id'=>'owner','original_name'=>'a.txt','stored_name'=>'a.bin','size'=>12,'mime'=>'text/plain','created_at'=>date(DATE_ATOM),'download_count'=>0];
     $store['shares']['s1'] = ['id'=>'s1','file_id'=>'f1','owner_id'=>'owner','recipient_id'=>'recipient','expires_at'=>date(DATE_ATOM,time()+100),'max_downloads'=>1,'downloads'=>0,'password_hash'=>null,'created_at'=>date(DATE_ATOM),'revoked_at'=>null];
 });
@@ -81,5 +87,56 @@ check(!allowedExtension('malware.exe') && !detectedMimeIsAllowed('required.txt',
 check(is_file(FILE_ROOT . '/demo-file-01.bin'), 'Tệp còn liên kết hợp lệ vẫn được giữ trên ổ đĩa');
 $preview = (string)shell_exec('php ' . escapeshellarg(APP_ROOT . '/tools/cleanup.php') . ' --preview');
 check(str_contains($preview, 'Xem truoc') && is_file(FILE_ROOT . '/demo-file-01.bin'), 'Chế độ xem trước không xóa tệp');
+
+// Phép thử mở rộng: Tìm kiếm người nhận qua email và bảo mật lời mời
+$storeData = readStore();
+check(findUserByEmail($storeData, 'recipient@gmail.com') !== null, 'Tìm thấy tài khoản người nhận theo email chính xác');
+check(findUserByEmail($storeData, 'RECIPIENT@GMAIL.COM') !== null, 'Tìm kiếm email không phân biệt chữ hoa thường');
+check(findUserByEmail($storeData, 'nonexistent@gmail.com') === null, 'Từ chối tài khoản email chưa tồn tại');
+
+// Phép thử: Luồng lời mời chia sẻ và cô lập danh sách "Chia sẻ với tôi" theo từng user
+withStore(function(array &$store): void {
+    $store['files']['invite-file'] = [
+        'id' => 'invite-file', 'owner_id' => 'owner', 'folder_id' => 'root-owner',
+        'original_name' => 'invite.pdf', 'stored_name' => 'invite.bin',
+        'size' => 100, 'mime' => 'application/pdf', 'created_at' => date(DATE_ATOM),
+        'download_count' => 0
+    ];
+    $store['shares']['invite-share'] = [
+        'id' => 'invite-share', 'file_id' => 'invite-file', 'owner_id' => 'owner',
+        'recipient_id' => 'recipient', 'expires_at' => date(DATE_ATOM, time() + 3600),
+        'max_downloads' => 10, 'downloads' => 0, 'password_hash' => null,
+        'created_at' => date(DATE_ATOM), 'revoked_at' => null, 'queue' => [],
+        'acceptances' => [], 'accepted' => false
+    ];
+});
+
+$freshStore = readStore();
+$recipientInvites = getPendingInvitations($freshStore, 'recipient');
+$ownerInvites = getPendingInvitations($freshStore, 'owner');
+$adminInvites = getPendingInvitations($freshStore, 'admin');
+
+check(count(array_filter($recipientInvites, fn($item) => $item[0]['id'] === 'invite-share')) === 1, 'Người nhận thấy lời mời chia sẻ mới từ chủ tệp');
+check(count(array_filter($ownerInvites, fn($item) => $item[0]['id'] === 'invite-share')) === 0, 'Chủ tệp không thấy lời mời của chính mình trong danh sách nhận');
+check(count(array_filter($adminInvites, fn($item) => $item[0]['id'] === 'invite-share')) === 0, 'Tài khoản khác không thấy lời mời không thuộc về mình');
+
+// Người nhận chấp nhận lời mời
+withStore(function(array &$store): void {
+    $store['shares']['invite-share']['acceptances']['recipient'] = date(DATE_ATOM);
+});
+$afterAcceptStore = readStore();
+$shareRow = $afterAcceptStore['shares']['invite-share'];
+check(isShareAcceptedByUser($shareRow, 'recipient'), 'Người nhận được đánh dấu đã chấp nhận lưu tệp');
+check(!isShareAcceptedByUser($shareRow, 'admin'), 'Tài khoản khác không bị tính là đã chấp nhận tệp này');
+
+// Phép thử bảo mật: Cơ chế Rate Limiting chống Brute-force
+$_SESSION = [];
+for ($i = 0; $i < 5; $i++) {
+    recordFailedAttempt('test_action');
+}
+check(isRateLimited('test_action', 5, 300), 'Kích hoạt giới hạn khi thử sai quá 5 lần');
+clearRateLimit('test_action');
+check(!isRateLimited('test_action', 5, 300), 'Xóa bộ đếm giới hạn khi thực hiện thành công');
+
 echo "TESTS=$passed FAILED=$failed\n";
 exit($failed === 0 ? 0 : 1);
