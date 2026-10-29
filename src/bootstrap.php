@@ -16,6 +16,42 @@ if (!function_exists('mb_strtoupper')) {
         return strtoupper($string);
     }
 }
+if (!function_exists('mime_content_type')) {
+    function mime_content_type(string $filename): string|false {
+        if (!is_file($filename)) {
+            return false;
+        }
+        if (class_exists('finfo')) {
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->file($filename);
+            if ($mime) return $mime;
+        }
+        $handle = @fopen($filename, 'rb');
+        if ($handle) {
+            $bytes = (string)fread($handle, 64);
+            fclose($handle);
+            if (str_starts_with($bytes, "%PDF-")) {
+                return 'application/pdf';
+            }
+            if (str_starts_with($bytes, "\x89PNG\r\n\x1a\n")) {
+                return 'image/png';
+            }
+            if (str_starts_with($bytes, "\xFF\xD8\xFF")) {
+                return 'image/jpeg';
+            }
+            if (str_starts_with($bytes, "PK\x03\x04") || str_starts_with($bytes, "PK\x05\x06")) {
+                return 'application/zip';
+            }
+            if (str_starts_with($bytes, "<?php") || str_starts_with($bytes, "<?")) {
+                return 'text/x-php';
+            }
+            if (!str_contains($bytes, "\0")) {
+                return 'text/plain';
+            }
+        }
+        return 'application/octet-stream';
+    }
+}
 
 const APP_ROOT = __DIR__ . '/..';
 const DB_FILE = APP_ROOT . '/storage/openshare.sqlite';
