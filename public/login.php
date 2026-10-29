@@ -81,25 +81,10 @@ layoutStart('Đăng nhập');
         <button type="submit" class="btn btn-primary btn-block">Đăng nhập</button>
     </form>
 
-    <div class="quick-demo-accounts">
-        <div class="demo-title">Tài khoản demo (Mật khẩu: <code>123</code>)</div>
-        <div class="demo-chips">
-            <button type="button" class="chip" onclick="fillDemo('owner@gmail.com')">Chủ tệp (owner)</button>
-            <button type="button" class="chip" onclick="fillDemo('recipient@gmail.com')">Người nhận (recipient)</button>
-        </div>
-    </div>
-
     <div class="auth-card-footer">
         <span>Chưa có tài khoản?</span>
         <a href="/register.php">Đăng ký ngay</a>
     </div>
 </div>
-
-<script>
-function fillDemo(email) {
-    document.getElementById('email').value = email;
-    document.getElementById('password').value = '123';
-}
-</script>
 
 <?php layoutEnd(); ?>
