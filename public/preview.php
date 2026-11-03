@@ -59,6 +59,16 @@ if ($access && $user && $share && $share['owner_id'] !== $user['id']) {
 
 $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
 $previewable = in_array($ext, ['pdf', 'txt', 'jpg', 'jpeg', 'png'], true);
+$docxHtml = '';
+$docxError = '';
+if ($access && $ext === 'docx') {
+    try {
+        $docxHtml = readDocxHtml((string)safeStoredPath($file));
+    } catch (RuntimeException $exception) {
+        $docxError = $exception->getMessage();
+    }
+}
+$canEditDocx = $access && $ext === 'docx' && $user && userCanManageFile($user, $file) && $docxError === '';
 $pendingAcceptance = $user && $share && $share['owner_id'] !== $user['id'] && !isShareAcceptedByUser($share, $user['id']);
 $downloadQuery = $share ? '?share=' . rawurlencode($share['id']) : '?file=' . rawurlencode($fileId);
 $contentQuery = '?file=' . rawurlencode($fileId) . ($share ? '&share=' . rawurlencode($share['id']) : '');
@@ -84,6 +94,9 @@ layoutStart('Xem trước · ' . $file['original_name']);
 
         <div class="preview-actions">
             <?php if ($access): ?>
+                <?php if ($canEditDocx): ?>
+                    <button type="button" class="btn-download-action docx-save-button" id="docx-save-button">Lưu thay đổi</button>
+                <?php endif; ?>
                 <a href="/download.php<?= $downloadQuery ?>" class="btn-download-action" title="Tải tệp về máy">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
@@ -158,12 +171,27 @@ layoutStart('Xem trước · ' . $file['original_name']);
             <div class="preview-stage text-stage">
                 <iframe src="/preview-content.php<?= $contentQuery ?>" title="Bản xem trước <?= h($file['original_name']) ?>"></iframe>
             </div>
+        <?php elseif ($ext === 'docx' && $docxError === ''): ?>
+            <div class="preview-stage docx-stage">
+                <div class="docx-toolbar">
+                    <span><?= $canEditDocx ? 'Bạn có thể chỉnh sửa trực tiếp nội dung tài liệu.' : 'Chế độ chỉ xem.' ?></span>
+                    <span id="docx-save-status" role="status"></span>
+                </div>
+                <article
+                    class="docx-editor"
+                    id="docx-editor"
+                    data-file="<?= h($fileId) ?>"
+                    data-share="<?= h($shareId) ?>"
+                    data-csrf="<?= h(csrf()) ?>"
+                    contenteditable="<?= $canEditDocx ? 'true' : 'false' ?>"
+                    spellcheck="true"><?= $docxHtml ?></article>
+            </div>
         <?php else: ?>
-            <!-- Unsupported format (DOCX, ZIP) -->
+            <!-- Unsupported format (ZIP or unavailable DOCX processor) -->
             <div class="preview-unsupported-card card">
                 <div class="unsupported-icon">📦</div>
                 <h3>Không thể xem trước định dạng .<?= h(strtoupper($ext)) ?> trực tiếp</h3>
-                <p class="text-muted">Định dạng này cần được tải về thiết bị để mở bằng ứng dụng tương thích.</p>
+                <p class="text-muted"><?= $docxError !== '' ? h($docxError) : 'Định dạng này cần được tải về thiết bị để mở bằng ứng dụng tương thích.' ?></p>
                 <div class="action-wrap">
                     <a href="/download.php<?= $downloadQuery ?>" class="btn btn-primary">
                         <span>⇩</span> Tải xuống tệp ngay (<?= formatBytes((int)$file['size']) ?>)
@@ -173,5 +201,41 @@ layoutStart('Xem trước · ' . $file['original_name']);
         <?php endif; ?>
     </div>
 </div>
+
+<?php if ($canEditDocx): ?>
+<script>
+(() => {
+    const editor = document.getElementById('docx-editor');
+    const saveButton = document.getElementById('docx-save-button');
+    const status = document.getElementById('docx-save-status');
+    if (!editor || !saveButton) return;
+
+    saveButton.addEventListener('click', async () => {
+        saveButton.disabled = true;
+        status.textContent = 'Đang lưu...';
+        try {
+            const response = await fetch('/save-docx.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                body: JSON.stringify({
+                    file: editor.dataset.file,
+                    share: editor.dataset.share,
+                    csrf: editor.dataset.csrf,
+                    content: editor.innerText
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) throw new Error(result.error || 'Không thể lưu tài liệu.');
+            status.textContent = 'Đã lưu';
+            setTimeout(() => { status.textContent = ''; }, 2500);
+        } catch (error) {
+            status.textContent = error.message;
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php layoutEnd(); ?>

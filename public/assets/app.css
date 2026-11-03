@@ -290,6 +290,7 @@ button, input, select, textarea {
 
 .sidebar-action {
     margin-bottom: 18px;
+    position: relative;
 }
 
 .btn-new {
@@ -310,6 +311,54 @@ button, input, select, textarea {
 .btn-new:hover {
     box-shadow: 0 2px 6px 2px rgba(60,64,67,0.2);
     background: #fafafa;
+}
+
+.new-menu {
+    position: absolute;
+    z-index: 20;
+    top: 58px;
+    left: 0;
+    width: 210px;
+    padding: 8px;
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(60, 64, 67, 0.18);
+}
+
+.new-menu[hidden] {
+    display: none;
+}
+
+.new-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    color: var(--color-text-main);
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.new-menu button:hover {
+    background: var(--color-bg-app);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .sidebar-nav {
@@ -523,6 +572,343 @@ button, input, select, textarea {
 .btn-icon.active {
     color: var(--color-primary);
     background: var(--color-primary-light);
+}
+
+/* ---------------- Drive Folders ---------------- */
+.drive-folders-section {
+    margin-bottom: 26px;
+}
+
+.drive-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.drive-section-heading h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-main);
+}
+
+.drive-section-heading span {
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.drive-folder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+}
+
+.drive-upload-drop-zone {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 92px;
+    margin: 0;
+    color: var(--color-primary);
+    background: rgba(232, 240, 254, 0.72);
+    border: 3px dashed var(--color-primary);
+    border-radius: 0;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.drive-upload-drop-zone[hidden] {
+    display: none;
+}
+
+.drive-upload-drop-zone small {
+    color: var(--color-text-sub);
+    font-weight: 400;
+}
+
+.drive-upload-drop-icon {
+    font-size: 24px;
+}
+
+.drive-folder-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    align-items: center;
+    padding: 14px 16px;
+    min-width: 0;
+    color: var(--color-text-main);
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    cursor: grab;
+}
+
+.drive-folder-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.drive-folder-card:hover {
+    background: #f8fafd;
+    border-color: #b7c8e8;
+    box-shadow: var(--shadow-sm);
+}
+
+.drive-folder-card.drag-target,
+.drop-target.drag-target {
+    background: var(--color-primary-light);
+    outline: 2px dashed var(--color-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.file-row-item[draggable="true"],
+.drive-card[draggable="true"] {
+    cursor: grab;
+}
+
+.file-row-item.dragging,
+.drive-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.drive-folder-icon {
+    grid-row: 1 / span 2;
+    font-size: 25px;
+}
+
+.drive-folder-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.drive-folder-count {
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.upload-status-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1100;
+    width: min(360px, calc(100vw - 32px));
+    padding: 16px;
+    color: var(--color-text-main);
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(32, 33, 36, 0.22);
+}
+
+.upload-status-panel[hidden] {
+    display: none;
+}
+
+.upload-status-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.upload-status-heading button {
+    border: 0;
+    background: transparent;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.upload-progress-track {
+    height: 6px;
+    margin: 14px 0 8px;
+    overflow: hidden;
+    background: #e8eaed;
+    border-radius: 4px;
+}
+
+.upload-progress-track span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--color-primary);
+    transition: width 0.15s ease;
+}
+
+.upload-status-detail {
+    color: var(--color-text-sub);
+    font-size: 13px;
+}
+
+.upload-complete-links {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.upload-complete-links a {
+    color: var(--color-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.folder-menu-anchor {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+.folder-more-button {
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-sub);
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.folder-more-button:hover {
+    background: #e8eaed;
+}
+
+.folder-more-menu {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 210px;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(60, 64, 67, 0.2);
+}
+
+.folder-more-menu[hidden],
+.folder-sort-menu[hidden] {
+    display: none;
+}
+
+.folder-more-menu a,
+.folder-more-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    color: var(--color-text-main);
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.folder-more-menu a:hover,
+.folder-more-menu button:hover {
+    background: var(--color-bg-app);
+}
+
+.folder-more-menu .folder-danger {
+    color: var(--color-danger);
+}
+
+.folder-sort-trigger {
+    position: relative;
+}
+
+.folder-sort-trigger b {
+    margin-left: auto;
+    font-size: 17px;
+}
+
+.folder-sort-menu {
+    position: absolute;
+    top: 72px;
+    right: 205px;
+    width: 140px;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(60, 64, 67, 0.2);
+}
+
+/* ---------------- Create Folder Modal ---------------- */
+.folder-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.folder-modal.visible {
+    display: flex;
+}
+
+.folder-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(32, 33, 36, 0.42);
+}
+
+.folder-modal-card {
+    position: relative;
+    width: min(420px, calc(100% - 32px));
+    padding: 24px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(32, 33, 36, 0.24);
+}
+
+.folder-modal-card h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+}
+
+.folder-modal-card p {
+    margin: 0 0 20px;
+}
+
+.folder-modal-card label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.folder-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.folder-modal-error {
+    min-height: 20px;
+    margin-top: 8px;
+    color: var(--color-danger);
+    font-size: 13px;
 }
 
 /* ---------------- File Table (List View) ---------------- */
@@ -1693,6 +2079,126 @@ button, input, select, textarea {
     border: none;
 }
 
+/* DOCX preview and editor */
+.preview-stage.docx-stage {
+    min-height: 75vh;
+    background: #eef1f5;
+    border: 1px solid var(--color-border);
+    padding-bottom: 32px;
+}
+
+.docx-toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px;
+    color: var(--color-text-sub);
+    font-size: 13px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--color-border);
+}
+
+#docx-save-status {
+    color: var(--color-text-muted);
+}
+
+.docx-editor {
+    width: min(850px, calc(100% - 48px));
+    min-height: 65vh;
+    margin: 28px auto;
+    padding: 60px 70px;
+    background: #ffffff;
+    border: 1px solid #dfe3e8;
+    box-shadow: 0 2px 8px rgba(60, 64, 67, 0.12);
+    color: #202124;
+    font-family: Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    outline: none;
+    white-space: pre-wrap;
+}
+
+.docx-editor p {
+    min-height: 1.6em;
+    margin: 0 0 8px;
+}
+
+.docx-editor strong {
+    font-weight: 700;
+}
+
+.docx-editor em {
+    font-style: italic;
+}
+
+.docx-editor u {
+    text-decoration: underline;
+}
+
+.docx-table {
+    width: 100%;
+    margin: 12px 0;
+    border-collapse: collapse;
+}
+
+.docx-table td {
+    min-width: 70px;
+    padding: 6px 8px;
+    border: 1px solid #9aa0a6;
+    vertical-align: top;
+}
+
+.docx-table p {
+    margin: 0;
+}
+
+.docx-tab {
+    white-space: pre;
+}
+
+.docx-unsupported-object {
+    display: inline-block;
+    padding: 2px 6px;
+    color: #5f6368;
+    background: #f1f3f4;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.docx-embedded-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 8px 0;
+}
+
+.docx-header,
+.docx-footer {
+    color: #5f6368;
+    font-size: 13px;
+    border-bottom: 1px solid #dadce0;
+    margin-bottom: 18px;
+    padding-bottom: 8px;
+}
+
+.docx-footer {
+    border-top: 1px solid #dadce0;
+    border-bottom: 0;
+    margin-top: 18px;
+    margin-bottom: 0;
+    padding-top: 8px;
+    padding-bottom: 0;
+}
+
+.docx-editor[contenteditable="false"] {
+    cursor: default;
+}
+
+.docx-save-button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
 /* Fallback iframe container */
 .preview-frame-container {
     height: 75vh;
@@ -2091,4 +2597,3 @@ button, input, select, textarea {
 .btn-success:hover {
     background-color: #137333;
 }
-

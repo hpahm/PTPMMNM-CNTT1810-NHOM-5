@@ -416,6 +416,30 @@ function normalizeStore(array &$data): void {
         if (!isset($data['folders'][$rootId])) {
             $data['folders'][$rootId] = ['id'=>$rootId,'owner_id'=>$user['id'],'name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)];
         }
+        $redundantFolderIds = [];
+        foreach ($data['folders'] as $folderId => $folder) {
+            if ($folderId !== $rootId
+                && ($folder['owner_id'] ?? '') === $user['id']
+                && in_array(($folder['parent_id'] ?? ''), ['', null, $rootId], true)
+                && strcasecmp((string)($folder['name'] ?? ''), 'Tệp của tôi') === 0) {
+                $redundantFolderIds[] = $folderId;
+            }
+        }
+        foreach ($redundantFolderIds as $redundantFolderId) {
+            foreach ($data['folders'] as &$candidate) {
+                if (($candidate['parent_id'] ?? '') === $redundantFolderId) {
+                    $candidate['parent_id'] = $rootId;
+                }
+            }
+            unset($candidate);
+            foreach ($data['files'] as &$file) {
+                if (($file['folder_id'] ?? '') === $redundantFolderId) {
+                    $file['folder_id'] = $rootId;
+                }
+            }
+            unset($file);
+            unset($data['folders'][$redundantFolderId]);
+        }
     }
     foreach ($data['files'] as &$file) {
         if (!isset($file['folder_id'])) $file['folder_id'] = 'root-' . $file['owner_id'];
@@ -657,6 +681,260 @@ function safeStoredPath(array $file): ?string {
     return str_starts_with($path, $root . DIRECTORY_SEPARATOR) ? $path : null;
 }
 
+function docxTempDirectory(): string {
+    $directory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'openshare-docx-' . bin2hex(random_bytes(8));
+    if (!mkdir($directory, 0700, true) && !is_dir($directory)) {
+        throw new RuntimeException('Không thể tạo thư mục tạm để xử lý DOCX.');
+    }
+    return $directory;
+}
+
+function removeDocxTempDirectory(string $directory): void {
+    foreach (glob($directory . DIRECTORY_SEPARATOR . '*') ?: [] as $path) {
+        if (is_dir($path)) {
+            removeDocxTempDirectory($path);
+        } elseif (is_file($path)) {
+            unlink($path);
+        }
+    }
+    if (is_dir($directory)) {
+        rmdir($directory);
+    }
+}
+
+function docxCommand(string $command, string $directory): void {
+    $output = [];
+    $exitCode = 0;
+    exec('cd /d ' . escapeshellarg($directory) . ' && 7z.exe ' . $command . ' 2>&1', $output, $exitCode);
+    if ($exitCode !== 0) {
+        throw new RuntimeException('Không thể xử lý DOCX. Hãy đảm bảo 7-Zip (7z.exe) có trong PATH.');
+    }
+}
+
+function readDocxParagraphs(string $path): array {
+    $directory = docxTempDirectory();
+    try {
+        docxCommand('x -y -o' . escapeshellarg($directory) . ' ' . escapeshellarg($path) . ' word/document.xml', $directory);
+        $xmlPath = $directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'document.xml';
+        if (!is_file($xmlPath)) {
+            throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
+        }
+        $document = new DOMDocument();
+        $document->load($xmlPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $paragraphs = [];
+        foreach ($xpath->query('//*[local-name()="p"]') ?: [] as $paragraph) {
+            $text = '';
+            foreach ($xpath->query('.//*[local-name()="t" or local-name()="tab" or local-name()="br"]', $paragraph) ?: [] as $node) {
+                if ($node->localName === 'tab') {
+                    $text .= "\t";
+                } elseif ($node->localName === 'br') {
+                    $text .= "\n";
+                } else {
+                    $text .= $node->textContent;
+                }
+            }
+            $paragraphs[] = $text;
+        }
+        return $paragraphs ?: [''];
+    } finally {
+        removeDocxTempDirectory($directory);
+    }
+}
+
+function docxTextNodeHtml(DOMNode $node, DOMXPath $xpath, array $images = []): string {
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        if ($child->nodeType === XML_TEXT_NODE) {
+            $html .= htmlspecialchars($child->nodeValue ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        } elseif ($child->nodeType === XML_ELEMENT_NODE) {
+            $name = $child->localName;
+            if ($name === 't' || $name === 'delText') {
+                $html .= htmlspecialchars($child->textContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            } elseif ($name === 'tab') {
+                $html .= '<span class="docx-tab">&#9;</span>';
+            } elseif ($name === 'br' || $name === 'cr') {
+                $html .= '<br>';
+            } elseif ($name === 'drawing' || $name === 'pict' || $name === 'object') {
+                $embed = $xpath->query('.//*[local-name()="blip"]', $child)->item(0);
+                $relationshipId = $embed instanceof DOMElement
+                    ? $embed->getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed')
+                    : '';
+                if ($relationshipId !== '' && isset($images[$relationshipId])) {
+                    $html .= '<img class="docx-embedded-image" src="' . $images[$relationshipId] . '" alt="Ảnh trong tài liệu">';
+                } else {
+                    $html .= '<span class="docx-unsupported-object">[Đối tượng nhúng]</span>';
+                }
+            } else {
+                $html .= docxTextNodeHtml($child, $xpath, $images);
+            }
+        }
+    }
+    return $html;
+}
+
+function docxParagraphHtml(DOMElement $paragraph, DOMXPath $xpath, array $images = []): string {
+    $html = '';
+    foreach ($xpath->query('./*[local-name()="r" or local-name()="hyperlink" or local-name()="fldSimple"]', $paragraph) ?: [] as $container) {
+        $runProperties = $xpath->query('./*[local-name()="rPr"]', $container)?->item(0);
+        $runHtml = docxTextNodeHtml($container, $xpath, $images);
+        if ($runProperties instanceof DOMElement) {
+            if ($xpath->query('./*[local-name()="b" or local-name()="bCs"]', $runProperties)->length > 0) {
+                $runHtml = '<strong>' . $runHtml . '</strong>';
+            }
+            if ($xpath->query('./*[local-name()="i" or local-name()="iCs"]', $runProperties)->length > 0) {
+                $runHtml = '<em>' . $runHtml . '</em>';
+            }
+            if ($xpath->query('./*[local-name()="u"]', $runProperties)->length > 0) {
+                $runHtml = '<u>' . $runHtml . '</u>';
+            }
+        }
+        $html .= $runHtml;
+    }
+    return '<p>' . ($html !== '' ? $html : '&nbsp;') . '</p>';
+}
+
+function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = []): string {
+    $html = '';
+    foreach ($container->childNodes as $child) {
+        if (!$child instanceof DOMElement) {
+            continue;
+        }
+        if ($child->localName === 'p') {
+            $html .= docxParagraphHtml($child, $xpath, $images);
+        } elseif ($child->localName === 'tbl') {
+            $html .= '<table class="docx-table"><tbody>';
+            foreach ($xpath->query('./*[local-name()="tr"]', $child) ?: [] as $row) {
+                $html .= '<tr>';
+                foreach ($xpath->query('./*[local-name()="tc"]', $row) ?: [] as $cell) {
+                    $html .= '<td>' . docxBlockHtml($cell, $xpath, $images) . '</td>';
+                }
+                $html .= '</tr>';
+            }
+            $html .= '</tbody></table>';
+        }
+    }
+    return $html;
+}
+
+function docxImageMap(string $directory, string $partName): array {
+    $relsPath = dirname($partName) . DIRECTORY_SEPARATOR . '_rels' . DIRECTORY_SEPARATOR . basename($partName) . '.rels';
+    if (!is_file($relsPath)) {
+        return [];
+    }
+    $rels = new DOMDocument();
+    if (!$rels->load($relsPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+        return [];
+    }
+    $map = [];
+    foreach ($rels->getElementsByTagNameNS('http://schemas.openxmlformats.org/package/2006/relationships', 'Relationship') as $relationship) {
+        $target = (string)$relationship->getAttribute('Target');
+        $id = (string)$relationship->getAttribute('Id');
+        if ($id === '' || !str_contains($target, 'media/')) {
+            continue;
+        }
+        $imagePath = dirname($partName) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $target);
+        $absolutePath = $directory . DIRECTORY_SEPARATOR . $imagePath;
+        if (!is_file($absolutePath)) {
+            continue;
+        }
+        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            default => 'image/' . $extension,
+        };
+        $map[$id] = 'data:' . $mime . ';base64,' . base64_encode((string)file_get_contents($absolutePath));
+    }
+    return $map;
+}
+
+function readDocxHtml(string $path): string {
+    $directory = docxTempDirectory();
+    try {
+        docxCommand('x -y -o' . escapeshellarg($directory) . ' ' . escapeshellarg($path) . ' word', $directory);
+        $documentPath = $directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'document.xml';
+        if (!is_file($documentPath)) {
+            throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
+        }
+        $document = new DOMDocument();
+        if (!$document->load($documentPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+            throw new RuntimeException('Không thể đọc cấu trúc DOCX.');
+        }
+        $xpath = new DOMXPath($document);
+        $body = $xpath->query('//*[local-name()="body"]')->item(0);
+        if (!$body) {
+            throw new RuntimeException('DOCX không chứa phần nội dung chính.');
+        }
+        $html = docxBlockHtml($body, $xpath, docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . 'document.xml'));
+        foreach (glob($directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'header*.xml') ?: [] as $headerPath) {
+            $header = new DOMDocument();
+            if ($header->load($headerPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+                $headerXpath = new DOMXPath($header);
+                $headerBody = $headerXpath->query('//*[local-name()="hdr"]')->item(0);
+                if ($headerBody) {
+                    $headerImages = docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . basename($headerPath));
+                    $html = '<div class="docx-header">' . docxBlockHtml($headerBody, $headerXpath, $headerImages) . '</div>' . $html;
+                }
+            }
+        }
+        foreach (glob($directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'footer*.xml') ?: [] as $footerPath) {
+            $footer = new DOMDocument();
+            if ($footer->load($footerPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+                $footerXpath = new DOMXPath($footer);
+                $footerBody = $footerXpath->query('//*[local-name()="ftr"]')->item(0);
+                if ($footerBody) {
+                    $footerImages = docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . basename($footerPath));
+                    $html .= '<div class="docx-footer">' . docxBlockHtml($footerBody, $footerXpath, $footerImages) . '</div>';
+                }
+            }
+        }
+        return $html !== '' ? $html : '<p>&nbsp;</p>';
+    } finally {
+        removeDocxTempDirectory($directory);
+    }
+}
+
+function buildDocxDocumentXml(string $content): string {
+    $paragraphs = preg_split('/\R/u', str_replace(["\r\n", "\r"], "\n", $content)) ?: [''];
+    $body = '';
+    foreach ($paragraphs as $paragraph) {
+        $escaped = htmlspecialchars($paragraph, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $body .= '<w:p><w:r><w:t xml:space="preserve">' . $escaped . '</w:t></w:r></w:p>';
+    }
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        . '<w:body>' . $body
+        . '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+        . '</w:body></w:document>';
+}
+
+function saveDocxContent(string $path, string $content): void {
+    if (strlen($content) > 1_000_000) {
+        throw new RuntimeException('Nội dung DOCX không được vượt quá 1 MB.');
+    }
+    $directory = docxTempDirectory();
+    try {
+        $xmlDirectory = $directory . DIRECTORY_SEPARATOR . 'word';
+        if (!mkdir($xmlDirectory, 0700, true)) {
+            throw new RuntimeException('Không thể chuẩn bị dữ liệu DOCX.');
+        }
+        if (!copy($path, $directory . DIRECTORY_SEPARATOR . 'edited.docx')) {
+            throw new RuntimeException('Không thể tạo bản DOCX tạm.');
+        }
+        if (file_put_contents($xmlDirectory . DIRECTORY_SEPARATOR . 'document.xml', buildDocxDocumentXml($content), LOCK_EX) === false) {
+            throw new RuntimeException('Không thể ghi nội dung DOCX.');
+        }
+        docxCommand('u ' . escapeshellarg($directory . DIRECTORY_SEPARATOR . 'edited.docx') . ' ' . escapeshellarg('word' . DIRECTORY_SEPARATOR . 'document.xml'), $directory);
+        if (!copy($directory . DIRECTORY_SEPARATOR . 'edited.docx', $path)) {
+            throw new RuntimeException('Không thể lưu DOCX đã chỉnh sửa.');
+        }
+    } finally {
+        removeDocxTempDirectory($directory);
+    }
+}
+
 function resetDemoFiles(): void {
     foreach (glob(FILE_ROOT . '/*') ?: [] as $path) {
         if (is_file($path)) unlink($path);
@@ -670,7 +948,6 @@ function layoutStart(string $title): void {
     $searchQ = get('q');
     
     $isHome = $currentPath === '/' && get('folder') === '';
-    $isFolders = $currentPath === '/folders.php' || ($currentPath === '/' && get('folder') !== '');
     $isShared = $currentPath === '/shared.php';
     $isLogs = $currentPath === '/logs.php';
     $isReport = $currentPath === '/report.php';
@@ -765,16 +1042,22 @@ function layoutStart(string $title): void {
         echo '<div class="app-layout">';
         echo '  <aside class="sidebar">';
         echo '    <div class="sidebar-action">';
-        echo '      <a href="/upload.php" class="btn-new">';
+        echo '      <button type="button" class="btn-new" id="new-menu-button" aria-expanded="false">';
         echo '        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#EA4335" d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/><path fill="#4285F4" d="M11 11V5h2v6z"/><path fill="#FBBC05" d="M19 11v2h-6v-2z"/><path fill="#34A853" d="M11 13v6h2v-6z"/></svg>';
         echo '        <span>Mới</span>';
-        echo '      </a>';
+        echo '      </button>';
+        echo '      <div class="new-menu" id="new-menu" hidden>';
+        echo '        <button type="button" data-new-action="folder">📁 <span>Tạo thư mục mới</span></button>';
+        echo '        <button type="button" data-new-action="file">📄 <span>Tải tệp lên</span></button>';
+        echo '        <button type="button" data-new-action="folder-upload">📂 <span>Tải thư mục lên</span></button>';
+        echo '      </div>';
+        echo '      <input type="file" id="new-file-input" class="visually-hidden" multiple accept=".pdf,.txt,.jpg,.jpeg,.png,.zip,.docx">';
+        echo '      <input type="file" id="new-folder-input" class="visually-hidden" webkitdirectory directory multiple>';
         echo '    </div>';
         echo '    <nav class="sidebar-nav">';
-        echo '      <a href="/"' . $navClass($isHome) . '><span class="nav-icon">📁</span><span>Drive của tôi</span></a>';
+        echo '      <a href="/" data-drop-folder="root-' . h($user['id']) . '"' . $navClass($isHome) . '><span class="nav-icon">📁</span><span>Drive của tôi</span></a>';
         $inviteBadgeHtml = $pendingInvites > 0 ? ' <span class="nav-badge-alert">' . $pendingInvites . '</span>' : '';
         echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">👥</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
-        echo '      <a href="/folders.php"' . $navClass($isFolders) . '><span class="nav-icon">📂</span><span>Thư mục</span></a>';
         echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">⏱</span><span>Hoạt động</span></a>';
         echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">📊</span><span>Bộ nhớ lưu trữ</span></a>';
         echo '    </nav>';

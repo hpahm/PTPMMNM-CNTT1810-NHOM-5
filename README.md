@@ -32,6 +32,9 @@ lab.bat run
 ```
 
 PHP cần bật phần mở rộng `pdo_sqlite` (hoặc `pdo_mysql` nếu dùng MySQL; `pdo_sqlsrv` nếu dùng SQL Server).
+Để xem trước và chỉnh sửa DOCX trực tiếp trong trình duyệt, máy chủ cần có `7z.exe`
+(7-Zip) trong `PATH`. Khi lưu, nội dung văn bản và xuống dòng được giữ lại; định dạng
+nâng cao của tài liệu sẽ được chuẩn hóa theo trình soạn thảo tích hợp.
 Mặc định ứng dụng dùng SQLite tại `storage/openshare.sqlite`. Có thể chuyển
 sang MySQL bằng `OPENSHARE_DB_DRIVER=mysql` hoặc SQL Server bằng
 `OPENSHARE_DB_DRIVER=sqlsrv`. Tham khảo [database/README.md](database/README.md)
@@ -79,7 +82,7 @@ xuống ngay trên máy thực hành.
 | Yêu cầu | Cách sử dụng |
 |---|---|
 | Đăng nhập và quản lý quota | Đăng nhập tại `/login.php`; quota được kiểm tra khi tải lên và xem tại `/report.php` hoặc thanh bên. |
-| Quản lý thư mục và tệp | Tạo thư mục tại `/folders.php`, tải tệp tại `/upload.php`, lọc tệp trên `/`. |
+| Quản lý thư mục và tệp | Tạo thư mục và tải tệp trực tiếp từ nút `Mới` trên Drive, lọc tệp trên `/`. |
 | Kiểm tra tệp trước khi nhận | Giới hạn 10 MB, phần mở rộng cho phép, MIME thực tế, dung lượng đĩa và quota. |
 | Liên kết chia sẻ | Chọn tệp → `Chia sẻ`; đặt hạn dùng, số lượt tải và mật khẩu tùy chọn. |
 | Kiểm tra quyền trước khi tải | Kiểm tra người nhận, chủ sở hữu, hạn dùng, mật khẩu, lượt tải và đường dẫn vật lý. |
