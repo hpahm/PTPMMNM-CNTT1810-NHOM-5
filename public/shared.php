@@ -5,28 +5,46 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = requireLogin();
-$data = readStore();
-$now = time();
+$db = database();
+$nowIso = date(DATE_ATOM);
+
+$stmt = $db->prepare(
+    'SELECT s.*, f.id AS f_id, f.owner_id AS f_owner_id, f.original_name, f.stored_name, f.size, f.mime, f.created_at AS f_created_at, f.download_count,
+            u.name AS owner_name, u.email AS owner_email,
+            CASE WHEN sa.user_id IS NOT NULL THEN 1 ELSE 0 END AS is_accepted
+     FROM shares s
+     INNER JOIN files f ON f.id = s.file_id
+     LEFT JOIN users u ON u.id = f.owner_id
+     LEFT JOIN share_acceptances sa ON sa.share_id = s.id AND sa.user_id = ?
+     WHERE s.owner_id <> ?
+       AND f.deleted_at IS NULL
+       AND s.revoked_at IS NULL
+       AND s.expires_at > ?
+       AND s.downloads < s.max_downloads
+       AND (sa.user_id IS NOT NULL OR s.recipient_id = ?)
+     ORDER BY s.created_at DESC'
+);
+$stmt->execute([$user['id'], $user['id'], $nowIso, $user['id']]);
 
 $pending = [];
 $accepted = [];
-
-foreach ($data['shares'] as $share) {
-    if (!validShare($share, $now) || ($share['owner_id'] ?? '') === $user['id']) {
-        continue;
-    }
-    $file = $data['files'][$share['file_id']] ?? null;
-    if (!$file) {
-        continue;
-    }
-
-    $isDirectRecipient = ($share['recipient_id'] ?? '') === $user['id'];
-    $hasAccepted = isShareAcceptedByUser($share, $user['id']);
-
-    if ($hasAccepted) {
-        $accepted[] = [$share, $file];
-    } elseif ($isDirectRecipient) {
-        $pending[] = [$share, $file];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $file = [
+        'id' => $row['f_id'],
+        'owner_id' => $row['f_owner_id'],
+        'original_name' => $row['original_name'],
+        'stored_name' => $row['stored_name'],
+        'size' => $row['size'],
+        'mime' => $row['mime'],
+        'created_at' => $row['f_created_at'],
+        'download_count' => $row['download_count'],
+        'owner_name' => $row['owner_name'] ?? 'Chủ tệp',
+        'owner_email' => $row['owner_email'] ?? '',
+    ];
+    if ((int)$row['is_accepted'] === 1) {
+        $accepted[] = [$row, $file];
+    } else {
+        $pending[] = [$row, $file];
     }
 }
 
@@ -58,9 +76,8 @@ layoutStart('Được chia sẻ với tôi');
             <div class="drive-grid" style="padding: 16px;">
                 <?php foreach ($pending as [$share, $file]): 
                     $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-                    $ownerUser = $data['users'][$file['owner_id']] ?? null;
-                    $ownerName = $ownerUser['name'] ?? 'Chủ tệp';
-                    $ownerEmail = $ownerUser['email'] ?? '';
+                    $ownerName = $file['owner_name'] ?? 'Chủ tệp';
+                    $ownerEmail = $file['owner_email'] ?? '';
                     $remaining = (int)$share['max_downloads'] - (int)$share['downloads'];
                 ?>
                 <div class="invitation-card-item">

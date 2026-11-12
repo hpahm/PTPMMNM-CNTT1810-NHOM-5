@@ -5,11 +5,18 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = currentUser();
-$data = readStore();
+$db = database();
 $fileId = get('file');
 $shareId = get('share');
-$file = $data['files'][$fileId] ?? null;
-$share = $shareId !== '' ? ($data['shares'][$shareId] ?? null) : null;
+$fStmt = $db->prepare('SELECT * FROM files WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+$fStmt->execute([$fileId]);
+$file = $fStmt->fetch(PDO::FETCH_ASSOC);
+$share = null;
+if ($shareId !== '') {
+    $sStmt = $db->prepare('SELECT * FROM shares WHERE id = ? LIMIT 1');
+    $sStmt->execute([$shareId]);
+    $share = $sStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
 $error = '';
 
 if (!$file) {
@@ -23,7 +30,7 @@ if ($user && userCanManageFile($user, $file)) {
     $access = false;
     $error = 'Bạn không có quyền xem tệp này hoặc liên kết đã hết hiệu lực / hết lượt tải.';
 } else {
-    $rateKey = 'share_pw_' . ($share['id'] ?? '');
+    $rateKey = 'share_pw:' . clientIp() . ':' . ($share['id'] ?? '');
     $access = !$share['password_hash'] || (($share['id'] ?? '') !== '' && ($_SESSION['preview_access'][$share['id']] ?? 0) > time());
     if (!$access && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         verifyCsrf();
@@ -31,7 +38,7 @@ if ($user && userCanManageFile($user, $file)) {
             $rem = getRateLimitRemainingSeconds($rateKey, 300);
             $error = "Bạn đã nhập sai mật khẩu quá nhiều lần. Vui lòng thử lại sau {$rem} giây.";
         } else {
-            $access = password_verify(post('password'), $share['password_hash']);
+            $access = password_verify(post('password'), (string)$share['password_hash']);
             if ($access) {
                 $_SESSION['preview_access'][$share['id']] = time() + 900;
                 clearRateLimit($rateKey);
@@ -52,15 +59,19 @@ if ((!$access && !($share && $share['password_hash'])) || safeStoredPath($file) 
 }
 
 if ($access && $user && $share && $share['owner_id'] !== $user['id']) {
-    withStore(function (array &$store) use ($user, $share): void {
-        logEvent($store, 'share_view', $user['id'], $share['file_id']);
-    });
+    logActivity($db, 'share_view', $user['id'], $share['file_id']);
 }
 
-$ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-$previewable = in_array($ext, ['pdf', 'txt', 'jpg', 'jpeg', 'png'], true);
+$ext = strtolower(pathinfo((string)$file['original_name'], PATHINFO_EXTENSION));
+$previewable = in_array($ext, ['pdf', 'txt', 'md', 'csv', 'json', 'xml', 'log', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp3', 'wav', 'mp4', 'webm'], true);
+$isTextEditable = in_array($ext, TEXT_EDITABLE_EXTENSIONS, true);
+$textContent = '';
 $docxHtml = '';
 $docxError = '';
+if ($access && $isTextEditable) {
+    $rawText = @file_get_contents((string)safeStoredPath($file));
+    $textContent = $rawText !== false ? $rawText : '';
+}
 if ($access && $ext === 'docx') {
     try {
         $docxHtml = readDocxHtml((string)safeStoredPath($file));
@@ -68,8 +79,14 @@ if ($access && $ext === 'docx') {
         $docxError = $exception->getMessage();
     }
 }
+$canEditText = $access && $isTextEditable && $user && userCanManageFile($user, $file);
 $canEditDocx = $access && $ext === 'docx' && $user && userCanManageFile($user, $file) && $docxError === '';
-$pendingAcceptance = $user && $share && $share['owner_id'] !== $user['id'] && !isShareAcceptedByUser($share, $user['id']);
+$pendingAcceptance = false;
+if ($user && $share && $share['owner_id'] !== $user['id']) {
+    $accStmt = $db->prepare('SELECT 1 FROM share_acceptances WHERE share_id = ? AND user_id = ? LIMIT 1');
+    $accStmt->execute([$share['id'], $user['id']]);
+    $pendingAcceptance = !$accStmt->fetchColumn();
+}
 $downloadQuery = $share ? '?share=' . rawurlencode($share['id']) : '?file=' . rawurlencode($fileId);
 $contentQuery = '?file=' . rawurlencode($fileId) . ($share ? '&share=' . rawurlencode($share['id']) : '');
 
@@ -94,8 +111,8 @@ layoutStart('Xem trước · ' . $file['original_name']);
 
         <div class="preview-actions">
             <?php if ($access): ?>
-                <?php if ($canEditDocx): ?>
-                    <button type="button" class="btn-download-action docx-save-button" id="docx-save-button">Lưu thay đổi</button>
+                <?php if ($canEditDocx || $canEditText): ?>
+                    <button type="button" class="btn-download-action docx-save-button" id="doc-save-button">💾 Lưu thay đổi</button>
                 <?php endif; ?>
                 <a href="/download.php<?= $downloadQuery ?>" class="btn-download-action" title="Tải tệp về máy">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -153,7 +170,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
                     <button type="submit" class="btn btn-primary btn-block">Mở khóa xem tệp</button>
                 </form>
             </div>
-        <?php elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)): ?>
+        <?php elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'], true)): ?>
             <!-- Modern Responsive Image Stage -->
             <div class="preview-stage image-stage">
                 <img src="/preview-content.php<?= $contentQuery ?>" 
@@ -161,21 +178,38 @@ layoutStart('Xem trước · ' . $file['original_name']);
                      class="preview-image-element"
                      loading="eager">
             </div>
+        <?php elseif (in_array($ext, ['mp4', 'webm'], true)): ?>
+            <div class="preview-stage image-stage">
+                <video controls style="max-width:100%;max-height:78vh;border-radius:10px;" src="/preview-content.php<?= $contentQuery ?>"></video>
+            </div>
+        <?php elseif (in_array($ext, ['mp3', 'wav'], true)): ?>
+            <div class="preview-stage image-stage">
+                <audio controls style="width:min(520px,90%);" src="/preview-content.php<?= $contentQuery ?>"></audio>
+            </div>
         <?php elseif ($ext === 'pdf'): ?>
             <!-- PDF Viewer Stage -->
             <div class="preview-stage pdf-stage">
                 <iframe src="/preview-content.php<?= $contentQuery ?>" title="Bản xem trước <?= h($file['original_name']) ?>"></iframe>
             </div>
-        <?php elseif ($ext === 'txt'): ?>
-            <!-- Text Viewer Stage -->
-            <div class="preview-stage text-stage">
-                <iframe src="/preview-content.php<?= $contentQuery ?>" title="Bản xem trước <?= h($file['original_name']) ?>"></iframe>
+        <?php elseif ($isTextEditable): ?>
+            <div class="preview-stage docx-stage">
+                <div class="docx-toolbar">
+                    <span><?= $canEditText ? 'Chỉnh sửa trực tiếp tệp văn bản (Ctrl+S để lưu nhanh).' : 'Chế độ chỉ xem.' ?></span>
+                    <span id="doc-save-status" role="status"></span>
+                </div>
+                <textarea
+                    id="text-editor"
+                    data-file="<?= h($fileId) ?>"
+                    data-csrf="<?= h(csrf()) ?>"
+                    <?= $canEditText ? '' : 'readonly' ?>
+                    spellcheck="false"
+                    style="width:100%;min-height:70vh;padding:18px;border:1px solid #dadce0;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:14px;line-height:1.6;resize:vertical;background:#fff;color:#1f1f1f;"><?= h($textContent) ?></textarea>
             </div>
         <?php elseif ($ext === 'docx' && $docxError === ''): ?>
             <div class="preview-stage docx-stage">
                 <div class="docx-toolbar">
-                    <span><?= $canEditDocx ? 'Bạn có thể chỉnh sửa trực tiếp nội dung tài liệu.' : 'Chế độ chỉ xem.' ?></span>
-                    <span id="docx-save-status" role="status"></span>
+                    <span><?= $canEditDocx ? 'Bạn có thể chỉnh sửa trực tiếp nội dung tài liệu (Ctrl+S để lưu nhanh).' : 'Chế độ chỉ xem.' ?></span>
+                    <span id="doc-save-status" role="status"></span>
                 </div>
                 <article
                     class="docx-editor"
@@ -202,36 +236,56 @@ layoutStart('Xem trước · ' . $file['original_name']);
     </div>
 </div>
 
-<?php if ($canEditDocx): ?>
+<?php if ($canEditDocx || $canEditText): ?>
 <script>
 (() => {
-    const editor = document.getElementById('docx-editor');
-    const saveButton = document.getElementById('docx-save-button');
-    const status = document.getElementById('docx-save-status');
+    const docxEditor = document.getElementById('docx-editor');
+    const textEditor = document.getElementById('text-editor');
+    const saveButton = document.getElementById('doc-save-button');
+    const status = document.getElementById('doc-save-status');
+    const editor = docxEditor || textEditor;
     if (!editor || !saveButton) return;
 
-    saveButton.addEventListener('click', async () => {
+    const endpoint = docxEditor ? '/save-docx.php' : '/save-text.php';
+    const getContent = () => docxEditor ? docxEditor.innerText : textEditor.value;
+
+    const markDirty = () => {
+        if (status && status.textContent !== 'Chưa lưu*') {
+            status.textContent = 'Chưa lưu*';
+        }
+    };
+    editor.addEventListener('input', markDirty);
+
+    const doSave = async () => {
         saveButton.disabled = true;
-        status.textContent = 'Đang lưu...';
+        if (status) status.textContent = 'Đang lưu...';
         try {
-            const response = await fetch('/save-docx.php', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                 body: JSON.stringify({
                     file: editor.dataset.file,
-                    share: editor.dataset.share,
+                    share: editor.dataset.share || '',
                     csrf: editor.dataset.csrf,
-                    content: editor.innerText
+                    content: getContent()
                 })
             });
             const result = await response.json();
             if (!response.ok || !result.ok) throw new Error(result.error || 'Không thể lưu tài liệu.');
-            status.textContent = 'Đã lưu';
-            setTimeout(() => { status.textContent = ''; }, 2500);
+            if (status) status.textContent = '✓ Đã lưu';
+            setTimeout(() => { if (status && status.textContent === '✓ Đã lưu') status.textContent = ''; }, 2500);
         } catch (error) {
-            status.textContent = error.message;
+            if (status) status.textContent = error.message || 'Lỗi khi lưu';
         } finally {
             saveButton.disabled = false;
+        }
+    };
+
+    saveButton.addEventListener('click', doSave);
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            doSave();
         }
     });
 })();

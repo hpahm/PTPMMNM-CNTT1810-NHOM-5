@@ -5,19 +5,57 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = requireLogin();
-$data = readStore();
+$db = database();
 $fileId = get('file');
-$targetFile = $fileId !== '' ? ($data['files'][$fileId] ?? null) : null;
+$targetFile = null;
+if ($fileId !== '') {
+    $fStmt = $db->prepare('SELECT * FROM files WHERE id = ? LIMIT 1');
+    $fStmt->execute([$fileId]);
+    $targetFile = $fStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
 
-$logs = array_reverse(array_filter($data['logs'], function (array $log) use ($user, $data, $fileId): bool {
-    if ($user['role'] === 'admin') {
-        return $fileId === '' || $log['file_id'] === $fileId;
-    }
+if ($user['role'] === 'admin') {
     if ($fileId !== '') {
-        return isset($data['files'][$fileId]) && $data['files'][$fileId]['owner_id'] === $user['id'] && $log['file_id'] === $fileId;
+        $lStmt = $db->prepare(
+            'SELECT l.*, u.name AS user_name, u.email AS user_email, f.original_name AS file_name
+             FROM access_logs l
+             LEFT JOIN users u ON u.id = l.user_id
+             LEFT JOIN files f ON f.id = l.file_id
+             WHERE l.file_id = ?
+             ORDER BY l.at DESC, l.id DESC LIMIT 100'
+        );
+        $lStmt->execute([$fileId]);
+    } else {
+        $lStmt = $db->query(
+            'SELECT l.*, u.name AS user_name, u.email AS user_email, f.original_name AS file_name
+             FROM access_logs l
+             LEFT JOIN users u ON u.id = l.user_id
+             LEFT JOIN files f ON f.id = l.file_id
+             ORDER BY l.at DESC, l.id DESC LIMIT 100'
+        );
     }
-    return $log['user_id'] === $user['id'];
-}));
+} elseif ($fileId !== '') {
+    $lStmt = $db->prepare(
+        'SELECT l.*, u.name AS user_name, u.email AS user_email, f.original_name AS file_name
+         FROM access_logs l
+         LEFT JOIN users u ON u.id = l.user_id
+         INNER JOIN files f ON f.id = l.file_id AND f.owner_id = ?
+         WHERE l.file_id = ?
+         ORDER BY l.at DESC, l.id DESC LIMIT 100'
+    );
+    $lStmt->execute([$user['id'], $fileId]);
+} else {
+    $lStmt = $db->prepare(
+        'SELECT l.*, u.name AS user_name, u.email AS user_email, f.original_name AS file_name
+         FROM access_logs l
+         LEFT JOIN users u ON u.id = l.user_id
+         LEFT JOIN files f ON f.id = l.file_id
+         WHERE l.user_id = ?
+         ORDER BY l.at DESC, l.id DESC LIMIT 100'
+    );
+    $lStmt->execute([$user['id']]);
+}
+$logs = $lStmt->fetchAll(PDO::FETCH_ASSOC);
 
 function translateAction(string $action): string {
     return match ($action) {
@@ -58,7 +96,7 @@ layoutStart('Nhật ký hoạt động');
 
     <div class="card">
         <div class="card-header">
-            <h3>Hoạt động gần đây (<?= min(100, count($logs)) ?> / <?= count($logs) ?>)</h3>
+            <h3>Hoạt động gần đây (<?= count($logs) ?>)</h3>
         </div>
 
         <?php if (empty($logs)): ?>
@@ -79,9 +117,9 @@ layoutStart('Nhật ký hoạt động');
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach (array_slice($logs, 0, 100) as $log): 
-                            $account = $data['users'][$log['user_id']]['name'] ?? ($data['users'][$log['user_id']]['email'] ?? $log['user_id']);
-                            $fileName = $data['files'][$log['file_id']]['original_name'] ?? ($log['file_id'] !== '' ? $log['file_id'] : '—');
+                        <?php foreach ($logs as $log): 
+                            $account = $log['user_name'] ?? ($log['user_email'] ?? $log['user_id']);
+                            $fileName = $log['file_name'] ?? ($log['file_id'] !== '' ? $log['file_id'] : '—');
                             $isSuccess = (bool)$log['success'];
                         ?>
                         <tr>
@@ -95,7 +133,7 @@ layoutStart('Nhật ký hoạt động');
                                 <span class="owner-pill"><?= h($account) ?></span>
                             </td>
                             <td>
-                                <?php if ($log['file_id'] !== '' && isset($data['files'][$log['file_id']])): ?>
+                                <?php if ($log['file_id'] !== '' && $log['file_name'] !== null): ?>
                                     <a href="/preview.php?file=<?= rawurlencode($log['file_id']) ?>" class="table-link">
                                         <?= h($fileName) ?>
                                     </a>

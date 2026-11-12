@@ -5,9 +5,11 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = requireLogin();
-$data = readStore();
+$db = database();
 $fileId = get('file');
-$file = $data['files'][$fileId] ?? null;
+$fStmt = $db->prepare('SELECT * FROM files WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+$fStmt->execute([$fileId]);
+$file = $fStmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$file || !userCanManageFile($user, $file)) {
     http_response_code(404);
@@ -17,6 +19,20 @@ if (!$file || !userCanManageFile($user, $file)) {
 $errors = [];
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verifyCsrf();
+    if (post('action') === 'update_password') {
+        $targetShareId = post('share_id');
+        $newPass = post('new_password');
+        $sCheck = $db->prepare('SELECT * FROM shares WHERE id = ? AND file_id = ? LIMIT 1');
+        $sCheck->execute([$targetShareId, $fileId]);
+        $targetShare = $sCheck->fetch(PDO::FETCH_ASSOC);
+        if ($targetShare && ($user['role'] === 'admin' || $targetShare['owner_id'] === $user['id'])) {
+            $newHash = $newPass !== '' ? password_hash($newPass, PASSWORD_DEFAULT) : null;
+            $db->prepare('UPDATE shares SET password_hash = ? WHERE id = ?')->execute([$newHash, $targetShareId]);
+            logActivity($db, 'share_password_updated', $user['id'], $fileId);
+            flash($newHash ? 'Đã cập nhật mật khẩu liên kết.' : 'Đã gỡ mật khẩu khỏi liên kết.');
+            redirect('/share.php?file=' . rawurlencode($fileId));
+        }
+    }
     $public = post('access') === 'public';
     $recipientEmail = strtolower(post('recipient_email'));
     $days = filter_var(post('days'), FILTER_VALIDATE_INT);
@@ -30,7 +46,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } elseif ($recipientEmail === strtolower((string)$user['email'])) {
             $errors[] = 'Không thể chia sẻ tệp cho chính tài khoản của bạn.';
         } else {
-            $recipientUser = findUserByEmail($data, $recipientEmail);
+            $recipientUser = findUserByEmailSql($recipientEmail);
             if (!$recipientUser) {
                 $errors[] = 'Không tìm thấy tài khoản với email "' . $recipientEmail . '". Người nhận cần đăng ký tài khoản OpenShare trước.';
             } elseif ($recipientUser['role'] === 'admin') {
@@ -50,34 +66,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (empty($errors)) {
         $shareId = bin2hex(random_bytes(8));
         $expires = date(DATE_ATOM, time() + $days * 86400);
+        $pwHash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+        $createdAt = date(DATE_ATOM);
 
-        withStore(function (array &$store) use ($shareId, $fileId, $recipientId, $max, $expires, $password, $user, $file, $public): void {
-            $store['shares'][$shareId] = [
-                'id' => $shareId,
-                'file_id' => $fileId,
-                'owner_id' => $file['owner_id'],
-                'recipient_id' => $recipientId,
-                'expires_at' => $expires,
-                'max_downloads' => $max,
-                'downloads' => 0,
-                'password_hash' => $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null,
-                'created_at' => date(DATE_ATOM),
-                'revoked_at' => null,
-                'queue' => [],
-                'acceptances' => [],
-                'accepted' => false
-            ];
-            logEvent($store, 'share_created', $user['id'], $fileId);
-        });
+        beginImmediate($db);
+        try {
+            $db->prepare('INSERT INTO shares (id, file_id, owner_id, recipient_id, expires_at, max_downloads, downloads, password_hash, created_at, revoked_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)')
+               ->execute([$shareId, $fileId, $file['owner_id'], $recipientId, $expires, $max, $pwHash, $createdAt]);
+            logActivity($db, 'share_created', $user['id'], $fileId);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $e;
+        }
 
         flash('Tạo liên kết chia sẻ thành công!');
         redirect('/share.php?file=' . rawurlencode($fileId));
     }
 }
 
-$data = readStore();
-$shares = array_filter($data['shares'], fn($s) => $s['file_id'] === $fileId);
-$ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
+$sStmt = $db->prepare(
+    "SELECT s.*, u.email AS recipient_email,
+            (SELECT COUNT(*) FROM share_queue q WHERE q.share_id = s.id AND q.status = 'waiting') AS waiting_count
+     FROM shares s
+     LEFT JOIN users u ON u.id = s.recipient_id
+     WHERE s.file_id = ?
+     ORDER BY s.created_at DESC"
+);
+$sStmt->execute([$fileId]);
+$shares = $sStmt->fetchAll(PDO::FETCH_ASSOC);
+$ext = strtolower(pathinfo((string)$file['original_name'], PATHINFO_EXTENSION));
 
 layoutStart('Chia sẻ: ' . $file['original_name']);
 ?>
@@ -178,11 +196,10 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
                     <tbody>
                         <?php 
                         foreach ($shares as $share): 
-                            normalizeShare($share);
                             $active = validShare($share, time());
-                            $waiting = count(array_filter($share['queue'], fn($entry) => ($entry['status'] ?? 'waiting') === 'waiting'));
+                            $waiting = (int)($share['waiting_count'] ?? 0);
                             $shareUrl = 'http' . (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 's' : '') . '://' . ($_SERVER['HTTP_HOST'] ?? '127.0.0.1:8127') . '/preview.php?file=' . rawurlencode($fileId) . '&share=' . rawurlencode($share['id']);
-                            $recipientLabel = isPublicShare($share) ? '🌐 Công khai' : ($data['users'][$share['recipient_id']]['email'] ?? $share['recipient_id']);
+                            $recipientLabel = isPublicShare($share) ? '🌐 Công khai' : ($share['recipient_email'] ?? $share['recipient_id']);
                         ?>
                         <tr>
                             <td><strong><?= h($recipientLabel) ?></strong></td>
@@ -214,11 +231,20 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
                             </td>
                             <td>
                                 <?php if ($share['revoked_at'] === null): ?>
-                                    <form method="post" action="/revoke.php" onsubmit="return confirm('Bạn có chắc muốn thu hồi liên kết này không?');">
-                                        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
-                                        <input type="hidden" name="share" value="<?= h($share['id']) ?>">
-                                        <button type="submit" class="btn btn-sm btn-danger">Thu hồi</button>
-                                    </form>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                        <form method="post" style="display:inline-flex;gap:4px;align-items:center;">
+                                            <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+                                            <input type="hidden" name="action" value="update_password">
+                                            <input type="hidden" name="share_id" value="<?= h($share['id']) ?>">
+                                            <input type="password" name="new_password" placeholder="<?= $share['password_hash'] ? 'Đổi/bỏ MK' : 'Đặt MK' ?>" style="width:95px;padding:4px 6px;font-size:12px;border:1px solid #d0d7de;border-radius:6px;">
+                                            <button type="submit" class="btn btn-sm btn-outline" title="Đặt hoặc để trống để gỡ mật khẩu">🔑</button>
+                                        </form>
+                                        <form method="post" action="/revoke.php" onsubmit="return confirm('Bạn có chắc muốn thu hồi liên kết này không?');">
+                                            <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+                                            <input type="hidden" name="share" value="<?= h($share['id']) ?>">
+                                            <button type="submit" class="btn btn-sm btn-danger">Thu hồi</button>
+                                        </form>
+                                    </div>
                                 <?php endif; ?>
                             </td>
                         </tr>

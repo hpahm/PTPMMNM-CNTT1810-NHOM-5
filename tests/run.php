@@ -1,5 +1,9 @@
 <?php
 declare(strict_types=1);
+$testRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'openshare-test-' . getmypid();
+if (!is_dir($testRoot)) mkdir($testRoot, 0770, true);
+putenv('OPENSHARE_DB_FILE=' . $testRoot . DIRECTORY_SEPARATOR . 'test.sqlite');
+putenv('OPENSHARE_FILE_ROOT=' . $testRoot . DIRECTORY_SEPARATOR . 'files');
 require __DIR__ . '/../src/bootstrap.php';
 
 $passed = 0; $failed = 0;
@@ -7,9 +11,29 @@ function check(bool $condition, string $name): void {
     global $passed, $failed;
     if ($condition) { $passed++; echo "PASS $name\n"; } else { $failed++; echo "FAIL $name\n"; }
 }
-resetStore(); $data = seedData();
+resetStore();
+withStore(function (array &$store): void {
+    $pw = password_hash('123', PASSWORD_DEFAULT);
+    $store['users']['owner'] = ['id'=>'owner','name'=>'Chủ tệp','email'=>'owner@gmail.com','role'=>'owner','password'=>$pw,'quota'=>USER_QUOTA_BYTES];
+    $store['users']['recipient'] = ['id'=>'recipient','name'=>'Người nhận','email'=>'recipient@gmail.com','role'=>'recipient','password'=>$pw,'quota'=>USER_QUOTA_BYTES];
+    $store['folders']['root-owner'] = ['id'=>'root-owner','owner_id'=>'owner','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)];
+    $store['folders']['root-recipient'] = ['id'=>'root-recipient','owner_id'=>'recipient','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)];
+    $store['files']['test-file-01'] = [
+        'id'=>'test-file-01','owner_id'=>'owner','folder_id'=>'root-owner',
+        'original_name'=>'tai-lieu-1.txt','stored_name'=>'test-file-01.bin',
+        'size'=>16,'mime'=>'text/plain','created_at'=>date(DATE_ATOM),'download_count'=>0
+    ];
+    $store['shares']['test-share-01'] = [
+        'id'=>'test-share-01','file_id'=>'test-file-01','owner_id'=>'owner',
+        'recipient_id'=>'recipient','expires_at'=>date(DATE_ATOM, time()+3600),
+        'max_downloads'=>5,'downloads'=>0,'password_hash'=>null,
+        'created_at'=>date(DATE_ATOM),'revoked_at'=>null,'queue'=>[]
+    ];
+});
+file_put_contents(FILE_ROOT . '/test-file-01.bin', "OpenShare test\n", LOCK_EX);
+$data = readStore();
 check(password_verify('123', $data['users']['owner']['password']), 'Đăng nhập dùng password hash');
-check(allowedExtension('report.pdf') && !allowedExtension('script.php'), 'Chỉ nhận loại tệp cho phép');
+check(allowedExtension('report.pdf') && allowedExtension('sheet.xlsx') && allowedExtension('clip.mp4') && allowedExtension('pic.webp') && !allowedExtension('script.php') && !allowedExtension('evil.svg'), 'Chỉ nhận loại tệp cho phép (mở rộng an toàn)');
 check(isGmailAddress('user@gmail.com') && !isGmailAddress('user@example.com'), 'Tài khoản phải dùng Gmail');
 check(userUsage(['files'=>[['owner_id'=>'owner','size'=>10],['owner_id'=>'recipient','size'=>5]]], 'owner') === 10, 'Tính quota theo chủ sở hữu');
 check(array_key_exists('root-owner', $data['folders']), 'Mỗi tài khoản có thư mục gốc');
@@ -84,9 +108,9 @@ withStore(function(array &$store): void {
 check(!validShare(readStore()['shares']['required-share'], time()), 'Liên kết đã thu hồi không được trả nội dung');
 check(!allowedExtension('malware.exe') && !detectedMimeIsAllowed('required.txt', __FILE__), 'Từ chối tệp sai loại hoặc nội dung không khớp');
 
-check(is_file(FILE_ROOT . '/demo-file-01.bin'), 'Tệp còn liên kết hợp lệ vẫn được giữ trên ổ đĩa');
+check(is_file(FILE_ROOT . '/test-file-01.bin'), 'Tệp còn liên kết hợp lệ vẫn được giữ trên ổ đĩa');
 $preview = (string)shell_exec('php ' . escapeshellarg(APP_ROOT . '/tools/cleanup.php') . ' --preview');
-check(str_contains($preview, 'Xem truoc') && is_file(FILE_ROOT . '/demo-file-01.bin'), 'Chế độ xem trước không xóa tệp');
+check(str_contains($preview, 'Xem truoc') && is_file(FILE_ROOT . '/test-file-01.bin'), 'Chế độ xem trước không xóa tệp');
 
 // Phép thử mở rộng: Tìm kiếm người nhận qua email và bảo mật lời mời
 $storeData = readStore();
@@ -137,6 +161,25 @@ for ($i = 0; $i < 5; $i++) {
 check(isRateLimited('test_action', 5, 300), 'Kích hoạt giới hạn khi thử sai quá 5 lần');
 clearRateLimit('test_action');
 check(!isRateLimited('test_action', 5, 300), 'Xóa bộ đếm giới hạn khi thực hiện thành công');
+
+// Phép thử: Xử lý ZIP & DOCX thuần PHP (không cần 7z.exe)
+$docxTestPath = FILE_ROOT . '/test-doc.docx';
+zipWriteArchive($docxTestPath, [
+    ['name' => '[Content_Types].xml', 'data' => '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>'],
+    ['name' => 'word/document.xml', 'data' => buildDocxDocumentXml("Xin chào OpenShare\nDòng thứ hai")],
+]);
+$docxHtml = readDocxHtml($docxTestPath);
+check(str_contains($docxHtml, 'Xin chào OpenShare') && str_contains($docxHtml, 'Dòng thứ hai'), 'Đọc DOCX thuần PHP không cần 7z');
+saveDocxContent($docxTestPath, 'Đã cập nhật nội dung');
+$paragraphs = readDocxParagraphs($docxTestPath);
+check(($paragraphs[0] ?? '') === 'Đã cập nhật nội dung', 'Lưu DOCX thuần PHP không cần 7z');
+
+// Phép thử: Hàng đợi SQL nguyên tử (requestDownloadSlotSql)
+$db = database();
+$db->prepare("UPDATE shares SET downloads = 0, max_downloads = 1 WHERE id = 'test-share-01'")->execute();
+$r1 = requestDownloadSlotSql($db, 'test-share-01', 'recipient', time());
+$r2 = requestDownloadSlotSql($db, 'test-share-01', 'owner', time());
+check($r1['status'] === 'granted' && $r2['status'] === 'queued' && $r2['position'] === 1, 'Cấp lượt và xếp hàng FIFO qua SQL nguyên tử');
 
 echo "TESTS=$passed FAILED=$failed\n";
 exit($failed === 0 ? 0 : 1);

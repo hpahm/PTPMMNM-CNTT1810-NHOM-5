@@ -22,7 +22,7 @@ if (!is_array($upload) || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ER
     $error = 'Loại tệp không được phép.';
 } elseif (!diskHasSpace((int)$upload['size'])) {
     $error = 'Dung lượng ổ đĩa máy chủ không còn đủ.';
-} elseif (userUsage(readStore(), $user['id']) + (int)$upload['size'] > (int)$user['quota']) {
+} elseif (userUsageBytes($user['id']) + (int)$upload['size'] > (int)$user['quota']) {
     $error = 'Tệp vượt quá hạn mức bộ nhớ của tài khoản.';
 }
 if ($error !== '') {
@@ -46,18 +46,35 @@ if (!detectedMimeIsAllowed((string)$upload['name'], $stored)) {
 }
 
 $folderId = post('folder_id');
- $savedFolderId = 'root-' . $user['id'];
-withStore(function (array &$store) use ($id, $user, $upload, $stored, $folderId, &$savedFolderId): void {
-    $defaultFolder = 'root-' . $user['id'];
-    $targetFolder = isset($store['folders'][$folderId]) && $store['folders'][$folderId]['owner_id'] === $user['id']
-        ? $folderId : $defaultFolder;
-    $savedFolderId = $targetFolder;
-    $store['files'][$id] = [
-        'id' => $id, 'owner_id' => $user['id'], 'folder_id' => $targetFolder,
-        'original_name' => basename((string)$upload['name']), 'stored_name' => basename($stored),
-        'size' => (int)$upload['size'], 'mime' => mime_content_type($stored) ?: 'application/octet-stream',
-        'created_at' => date(DATE_ATOM), 'download_count' => 0,
-    ];
-    logEvent($store, 'upload', $user['id'], $id);
-});
-echo json_encode(['ok' => true, 'folder_id' => $savedFolderId], JSON_UNESCAPED_UNICODE);
+$defaultFolder = 'root-' . $user['id'];
+$db = database();
+$targetFolder = $defaultFolder;
+if ($folderId !== '') {
+    $fStmt = $db->prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ? LIMIT 1');
+    $fStmt->execute([$folderId, $user['id']]);
+    if ($fStmt->fetchColumn()) {
+        $targetFolder = $folderId;
+    }
+}
+$mime = mime_content_type($stored) ?: 'application/octet-stream';
+$fileHash = hash_file('sha256', $stored) ?: null;
+$dupStmt = $db->prepare('SELECT original_name FROM files WHERE owner_id = ? AND file_hash = ? AND deleted_at IS NULL LIMIT 1');
+$dupStmt->execute([$user['id'], $fileHash]);
+$duplicateOf = $dupStmt->fetchColumn();
+
+beginImmediate($db);
+try {
+    $db->prepare('INSERT INTO files (id, owner_id, folder_id, original_name, stored_name, size, mime, file_hash, created_at, download_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)')
+       ->execute([$id, $user['id'], $targetFolder, basename((string)$upload['name']), basename($stored), (int)$upload['size'], $mime, $fileHash, date(DATE_ATOM)]);
+    logActivity($db, 'upload', $user['id'], $id);
+    $db->commit();
+} catch (Throwable $e) {
+    if ($db->inTransaction()) $db->rollBack();
+    @unlink($stored);
+    throw $e;
+}
+echo json_encode([
+    'ok' => true,
+    'folder_id' => $targetFolder,
+    'duplicate_of' => $duplicateOf !== false ? (string)$duplicateOf : null,
+], JSON_UNESCAPED_UNICODE);

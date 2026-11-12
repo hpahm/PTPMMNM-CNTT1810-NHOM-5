@@ -11,31 +11,27 @@ if (currentUser()) {
 $error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verifyCsrf();
-    if (isRateLimited('login', 5, 300)) {
-        $remaining = getRateLimitRemainingSeconds('login', 300);
+    $rateKey = 'login:' . clientIp();
+    if (isRateLimited($rateKey, 5, 300)) {
+        $remaining = getRateLimitRemainingSeconds($rateKey, 300);
         $error = "Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau {$remaining} giây.";
     } else {
         $email = strtolower(post('email'));
         $password = post('password');
-        $data = readStore();
 
         if (!isGmailAddress($email)) {
             $error = 'Chỉ chấp nhận tài khoản có đuôi @gmail.com.';
         } else {
-            $loggedIn = false;
-            foreach ($data['users'] as $user) {
-                if ($user['email'] === $email && password_verify($password, $user['password'])) {
-                    session_regenerate_id(true);
-                    $_SESSION['user_id'] = $user['id'];
-                    clearRateLimit('login');
-                    $loggedIn = true;
-                    redirect('/');
-                }
+            $user = findUserByEmailSql($email);
+            if ($user && password_verify($password, (string)$user['password'])) {
+                session_regenerate_id(true);
+                $_SESSION['user_id'] = $user['id'];
+                currentUser(true);
+                clearRateLimit($rateKey);
+                redirect('/');
             }
-            if (!$loggedIn) {
-                recordFailedAttempt('login');
-                $error = 'Email hoặc mật khẩu không chính xác.';
-            }
+            recordFailedAttempt($rateKey);
+            $error = 'Email hoặc mật khẩu không chính xác.';
         }
     }
 }

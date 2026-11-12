@@ -47,8 +47,7 @@ foreach ($paths as $index => $rawPath) {
     $normalizedPaths[$index] = $segments;
 }
 
-$data = readStore();
-if (!diskHasSpace($totalSize) || userUsage($data, $user['id']) + $totalSize > (int)$user['quota']) {
+if (!diskHasSpace($totalSize) || userUsageBytes($user['id']) + $totalSize > (int)$user['quota']) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Thư mục vượt quá dung lượng ổ đĩa hoặc quota tài khoản.'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -56,6 +55,7 @@ if (!diskHasSpace($totalSize) || userUsage($data, $user['id']) + $totalSize > (i
 
 $storedFiles = [];
 $rootFolderId = null;
+$db = database();
 try {
     foreach ($normalizedPaths as $index => $segments) {
         $stored = FILE_ROOT . DIRECTORY_SEPARATOR . bin2hex(random_bytes(8)) . '.bin';
@@ -75,10 +75,17 @@ try {
     }
 
     $parentId = post('folder_id');
-    $parentId = isset($data['folders'][$parentId]) && $data['folders'][$parentId]['owner_id'] === $user['id']
-        ? $parentId : 'root-' . $user['id'];
-    withStore(function (array &$store) use ($user, $parentId, $storedFiles, &$rootFolderId): void {
+    $pCheck = $db->prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ? LIMIT 1');
+    $pCheck->execute([$parentId, $user['id']]);
+    $parentId = $pCheck->fetchColumn() ? $parentId : 'root-' . $user['id'];
+
+    beginImmediate($db);
+    try {
         $folderIds = [$parentId => $parentId];
+        $findFolderStmt = $db->prepare('SELECT id FROM folders WHERE owner_id = ? AND parent_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+        $insertFolderStmt = $db->prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at) VALUES (?, ?, ?, ?, ?)');
+        $insertFileStmt = $db->prepare('INSERT INTO files (id, owner_id, folder_id, original_name, stored_name, size, mime, file_hash, created_at, download_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)');
+
         foreach ($storedFiles as $storedFile) {
             $currentParent = $parentId;
             $folderPath = [];
@@ -86,27 +93,14 @@ try {
                 $folderPath[] = $segment;
                 $key = $currentParent . '/' . implode('/', $folderPath);
                 if (!isset($folderIds[$key])) {
-                    $existingId = null;
-                    foreach ($store['folders'] as $folder) {
-                        if ($folder['owner_id'] === $user['id']
-                            && ($folder['parent_id'] ?? '') === $currentParent
-                            && strcasecmp($folder['name'], $segment) === 0) {
-                            $existingId = $folder['id'];
-                            break;
-                        }
-                    }
-                    if ($existingId === null) {
+                    $findFolderStmt->execute([$user['id'], $currentParent, $segment]);
+                    $existingId = $findFolderStmt->fetchColumn();
+                    if ($existingId === false) {
                         $existingId = bin2hex(random_bytes(8));
-                        $store['folders'][$existingId] = [
-                            'id' => $existingId,
-                            'owner_id' => $user['id'],
-                            'name' => $segment,
-                            'parent_id' => $currentParent,
-                            'created_at' => date(DATE_ATOM),
-                        ];
-                        logEvent($store, 'folder_created', $user['id']);
+                        $insertFolderStmt->execute([$existingId, $user['id'], $segment, $currentParent, date(DATE_ATOM)]);
+                        logActivity($db, 'folder_created', $user['id']);
                     }
-                    $folderIds[$key] = $existingId;
+                    $folderIds[$key] = (string)$existingId;
                 }
                 $currentParent = $folderIds[$key];
                 if ($rootFolderId === null) {
@@ -114,20 +108,16 @@ try {
                 }
             }
             $id = bin2hex(random_bytes(8));
-            $store['files'][$id] = [
-                'id' => $id,
-                'owner_id' => $user['id'],
-                'folder_id' => $currentParent,
-                'original_name' => $storedFile['name'],
-                'stored_name' => basename($storedFile['path']),
-                'size' => $storedFile['size'],
-                'mime' => mime_content_type($storedFile['path']) ?: 'application/octet-stream',
-                'created_at' => date(DATE_ATOM),
-                'download_count' => 0,
-            ];
-            logEvent($store, 'upload', $user['id'], $id);
+            $mime = mime_content_type($storedFile['path']) ?: 'application/octet-stream';
+            $fileHash = hash_file('sha256', $storedFile['path']) ?: null;
+            $insertFileStmt->execute([$id, $user['id'], $currentParent, $storedFile['name'], basename($storedFile['path']), $storedFile['size'], $mime, $fileHash, date(DATE_ATOM)]);
+            logActivity($db, 'upload', $user['id'], $id);
         }
-    });
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
     echo json_encode(['ok' => true, 'files' => count($storedFiles), 'folder_id' => $rootFolderId ?? $parentId], JSON_UNESCAPED_UNICODE);
 } catch (RuntimeException $exception) {
     foreach ($storedFiles as $storedFile) {

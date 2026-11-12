@@ -53,21 +53,49 @@ if (!function_exists('mime_content_type')) {
     }
 }
 
+require_once __DIR__ . '/zip.php';
+
 const APP_ROOT = __DIR__ . '/..';
-const DB_FILE = APP_ROOT . '/storage/openshare.sqlite';
+define('DB_FILE', getenv('OPENSHARE_DB_FILE') ?: APP_ROOT . '/storage/openshare.sqlite');
 const DB_SERVER = 'DESKTOP-L3KA80E\\SQLEXPRESS';
 const DB_NAME = 'OpenShare';
-const FILE_ROOT = APP_ROOT . '/storage/files';
+define('FILE_ROOT', getenv('OPENSHARE_FILE_ROOT') ?: APP_ROOT . '/storage/files');
 const MAX_FILE_BYTES = 10_000_000;
 const USER_QUOTA_BYTES = 1_073_741_824; // 1 GB (1024 * 1024 * 1024 bytes)
+const TEXT_EDITABLE_EXTENSIONS = ['txt', 'md', 'csv', 'json', 'xml', 'log'];
 const ALLOWED_MIME_TYPES = [
-    'pdf' => ['application/pdf'],
-    'txt' => ['text/plain'],
-    'jpg' => ['image/jpeg'],
+    'pdf'  => ['application/pdf'],
+    'txt'  => ['text/plain'],
+    'log'  => ['text/plain'],
+    'md'   => ['text/plain', 'text/markdown', 'text/x-markdown'],
+    'csv'  => ['text/plain', 'text/csv', 'application/csv', 'application/vnd.ms-excel'],
+    'json' => ['text/plain', 'application/json'],
+    'xml'  => ['text/plain', 'text/xml', 'application/xml'],
+    'rtf'  => ['application/rtf', 'text/rtf'],
+    'jpg'  => ['image/jpeg'],
     'jpeg' => ['image/jpeg'],
-    'png' => ['image/png'],
-    'zip' => ['application/zip', 'application/x-zip-compressed'],
+    'png'  => ['image/png'],
+    'gif'  => ['image/gif'],
+    'webp' => ['image/webp'],
+    'bmp'  => ['image/bmp', 'image/x-ms-bmp'],
+    'mp3'  => ['audio/mpeg', 'audio/mp3', 'application/octet-stream'],
+    'wav'  => ['audio/wav', 'audio/x-wav', 'audio/wave'],
+    'mp4'  => ['video/mp4', 'application/mp4'],
+    'webm' => ['video/webm', 'audio/webm'],
+    'zip'  => ['application/zip', 'application/x-zip-compressed'],
+    'rar'  => ['application/x-rar-compressed', 'application/vnd.rar', 'application/x-rar'],
+    '7z'   => ['application/x-7z-compressed'],
+    'tar'  => ['application/x-tar'],
+    'gz'   => ['application/gzip', 'application/x-gzip'],
+    'doc'  => ['application/msword', 'application/x-ole-storage'],
     'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+    'xls'  => ['application/vnd.ms-excel', 'application/x-ole-storage'],
+    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+    'ppt'  => ['application/vnd.ms-powerpoint', 'application/x-ole-storage'],
+    'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip'],
+    'odt'  => ['application/vnd.oasis.opendocument.text', 'application/zip'],
+    'ods'  => ['application/vnd.oasis.opendocument.spreadsheet', 'application/zip'],
+    'odp'  => ['application/vnd.oasis.opendocument.presentation', 'application/zip'],
 ];
 
 function dbDriver(): string {
@@ -101,6 +129,7 @@ function startApp(): void {
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: strict-origin-when-cross-origin');
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
     }
 }
 
@@ -151,13 +180,30 @@ function redirect(string $path): never {
     exit;
 }
 
-function currentUser(): ?array {
+function currentUser(bool $refresh = false): ?array {
+    static $cachedId = null;
+    static $cachedUser = null;
     $id = $_SESSION['user_id'] ?? null;
-    if (!is_string($id)) {
+    if (!is_string($id) || $id === '') {
+        $cachedId = null;
+        $cachedUser = null;
         return null;
     }
-    $data = readStore();
-    return $data['users'][$id] ?? null;
+    if (!$refresh && $cachedId === $id && $cachedUser !== null) {
+        return $cachedUser;
+    }
+    $stmt = database()->prepare('SELECT id, name, email, role, quota FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        $cachedId = null;
+        $cachedUser = null;
+        return null;
+    }
+    $user['quota'] = (int)$user['quota'];
+    $cachedId = $id;
+    $cachedUser = $user;
+    return $user;
 }
 
 function requireLogin(): array {
@@ -184,10 +230,16 @@ function formatBytes(int $bytes): string {
 }
 
 function database(): PDO {
+    static $connections = [];
+    $driver = dbDriver();
+    $cacheKey = $driver . ':' . ($driver === 'sqlite' ? DB_FILE : (getenv('OPENSHARE_DB_NAME') ?: DB_NAME));
+    if (isset($connections[$cacheKey])) {
+        return $connections[$cacheKey];
+    }
     if (!class_exists('PDO')) {
         throw new RuntimeException('PHP PDO chưa được bật.');
     }
-    if (dbDriver() === 'mysql') {
+    if ($driver === 'mysql') {
         if (!in_array('mysql', PDO::getAvailableDrivers(), true)) {
             throw new RuntimeException('PHP cần bật pdo_mysql để chạy OpenShare với MySQL.');
         }
@@ -200,7 +252,7 @@ function database(): PDO {
         $db = new PDO($dsn, $user, $password, [
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
-    } elseif (dbDriver() === 'sqlsrv') {
+    } elseif ($driver === 'sqlsrv') {
         if (!in_array('sqlsrv', PDO::getAvailableDrivers(), true)) {
             throw new RuntimeException('PHP cần bật pdo_sqlsrv để kết nối SQL Server.');
         }
@@ -211,13 +263,54 @@ function database(): PDO {
         if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
             throw new RuntimeException('PHP cần bật phần mở rộng pdo_sqlite để chạy OpenShare.');
         }
+        $dir = dirname(DB_FILE);
+        if (!is_dir($dir) && !mkdir($dir, 0770, true) && !is_dir($dir)) {
+            throw new RuntimeException('Không thể tạo thư mục cơ sở dữ liệu.');
+        }
         $db = new PDO('sqlite:' . DB_FILE);
     }
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    if (dbDriver() === 'sqlite') {
+    $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    if ($driver === 'sqlite') {
         $db->exec('PRAGMA foreign_keys = ON');
+        $db->exec('PRAGMA journal_mode = WAL');
+        $db->exec('PRAGMA synchronous = NORMAL');
+        $db->exec('PRAGMA busy_timeout = 5000');
+        $db->exec('PRAGMA cache_size = -2000');
+        $db->exec('PRAGMA temp_store = FILE');
     }
+    ensureSchema($db);
+    $connections[$cacheKey] = $db;
     return $db;
+}
+
+function ensureSchema(PDO $db): void {
+    static $checked = [];
+    $key = dbDriver() . ':' . (dbDriver() === 'sqlite' ? DB_FILE : 'remote');
+    if (isset($checked[$key])) {
+        return;
+    }
+    if (dbDriver() === 'sqlite') {
+        $exists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='rate_limits'")->fetchColumn();
+        if (!$exists) {
+            createSchema($db);
+        }
+        $folderCols = array_column($db->query('PRAGMA table_info(folders)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (!in_array('deleted_at', $folderCols, true)) {
+            $db->exec('ALTER TABLE folders ADD COLUMN deleted_at TEXT');
+        }
+        $fileCols = array_column($db->query('PRAGMA table_info(files)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (!in_array('deleted_at', $fileCols, true)) {
+            $db->exec('ALTER TABLE files ADD COLUMN deleted_at TEXT');
+        }
+        if (!in_array('file_hash', $fileCols, true)) {
+            $db->exec('ALTER TABLE files ADD COLUMN file_hash TEXT');
+        }
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_files_hash ON files(owner_id, file_hash)');
+    } else {
+        createSchema($db);
+    }
+    $checked[$key] = true;
 }
 
 function createSchema(PDO $db): void {
@@ -245,14 +338,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL, parent_id TEXT, created_at TEXT NOT NULL,
-    UNIQUE(owner_id, name)
+    name TEXT NOT NULL, parent_id TEXT, created_at TEXT NOT NULL, deleted_at TEXT,
+    UNIQUE(owner_id, parent_id, name)
 );
 CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     folder_id TEXT NOT NULL REFERENCES folders(id), original_name TEXT NOT NULL,
     stored_name TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, mime TEXT NOT NULL,
-    created_at TEXT NOT NULL, download_count INTEGER NOT NULL DEFAULT 0
+    file_hash TEXT, created_at TEXT NOT NULL, deleted_at TEXT, download_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS shares (
     id TEXT PRIMARY KEY, file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -275,10 +368,20 @@ CREATE TABLE IF NOT EXISTS share_acceptances (
     accepted_at TEXT NOT NULL,
     PRIMARY KEY (share_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS rate_limits (
+    action_key TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    window_start INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_owner_folder ON files(owner_id, folder_id);
+CREATE INDEX IF NOT EXISTS idx_folders_owner_parent ON folders(owner_id, parent_id);
 CREATE INDEX IF NOT EXISTS idx_shares_file ON shares(file_id);
 CREATE INDEX IF NOT EXISTS idx_shares_recipient ON shares(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_queue_share ON share_queue(share_id, requested_at);
 CREATE INDEX IF NOT EXISTS idx_logs_file ON access_logs(file_id);
+CREATE INDEX IF NOT EXISTS idx_logs_user ON access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_logs_at ON access_logs(at);
 SQL);
 }
 
@@ -314,7 +417,9 @@ function databaseToArray(PDO $db): array {
         $row['success'] = (bool)$row['success'];
         $data['logs'][] = $row;
     }
-    normalizeStore($data);
+    foreach ($data['shares'] as &$share) {
+        normalizeShare($share);
+    }
     return $data;
 }
 
@@ -356,139 +461,154 @@ function arrayToDatabase(PDO $db, array $data): void {
     }
 }
 
-function seedData(): array {
-    $password = password_hash('123', PASSWORD_DEFAULT);
-    $users = [
-        'owner'=>['id'=>'owner','name'=>'Chủ tệp','email'=>'owner@gmail.com','role'=>'owner','password'=>$password,'quota'=>USER_QUOTA_BYTES],
-        'recipient'=>['id'=>'recipient','name'=>'Người nhận','email'=>'recipient@gmail.com','role'=>'recipient','password'=>$password,'quota'=>USER_QUOTA_BYTES],
-    ];
-    $folders = [
-        'root-owner'=>['id'=>'root-owner','owner_id'=>'owner','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)],
-        'root-recipient'=>['id'=>'root-recipient','owner_id'=>'recipient','name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)],
-    ];
-    $extensions = ['pdf', 'txt', 'jpg', 'png', 'zip', 'docx'];
-    $files = [];
-    for ($number = 1; $number <= 30; $number++) {
-        $ownerId = 'owner';
-        $extension = $extensions[($number - 1) % count($extensions)];
-        $id = 'demo-file-' . str_pad((string)$number, 2, '0', STR_PAD_LEFT);
-        $content = "OpenShare demo file {$number}\n";
-        $files[$id] = [
-            'id' => $id,
-            'owner_id' => $ownerId,
-            'folder_id' => 'root-' . $ownerId,
-            'original_name' => "tai-lieu-demo-{$number}.{$extension}",
-            'stored_name' => "{$id}.bin",
-            'size' => strlen($content),
-            'mime' => ALLOWED_MIME_TYPES[$extension][0],
-            'created_at' => date(DATE_ATOM, time() - (30 - $number) * 3600),
-            'download_count' => 0,
-        ];
-    }
-    $shares = [];
-    for ($number = 1; $number <= 50; $number++) {
-        $fileNumber = (($number - 1) % 30) + 1;
-        $fileId = 'demo-file-' . str_pad((string)$fileNumber, 2, '0', STR_PAD_LEFT);
-        $ownerId = $files[$fileId]['owner_id'];
-        $recipientId = $ownerId === 'recipient' ? 'owner' : 'recipient';
-        $shareId = 'demo-share-' . str_pad((string)$number, 2, '0', STR_PAD_LEFT);
-        $shares[$shareId] = [
-            'id' => $shareId,
-            'file_id' => $fileId,
-            'owner_id' => $ownerId,
-            'recipient_id' => $recipientId,
-            'expires_at' => date(DATE_ATOM, time() + (7 + ($number % 30)) * 86400),
-            'max_downloads' => 5 + ($number % 6),
-            'downloads' => 0,
-            'password_hash' => null,
-            'created_at' => date(DATE_ATOM, time() - ($number % 10) * 86400),
-            'revoked_at' => null,
-            'queue' => [],
-        ];
-    }
-    return ['users'=>$users, 'folders'=>$folders, 'files'=>$files, 'shares'=>$shares, 'logs'=>[]];
-}
-
-function normalizeStore(array &$data): void {
-    if (!isset($data['folders']) || !is_array($data['folders'])) $data['folders'] = [];
-    foreach ($data['users'] as $user) {
-        $rootId = 'root-' . $user['id'];
-        if (!isset($data['folders'][$rootId])) {
-            $data['folders'][$rootId] = ['id'=>$rootId,'owner_id'=>$user['id'],'name'=>'Tệp của tôi','parent_id'=>null,'created_at'=>date(DATE_ATOM)];
-        }
-        $redundantFolderIds = [];
-        foreach ($data['folders'] as $folderId => $folder) {
-            if ($folderId !== $rootId
-                && ($folder['owner_id'] ?? '') === $user['id']
-                && in_array(($folder['parent_id'] ?? ''), ['', null, $rootId], true)
-                && strcasecmp((string)($folder['name'] ?? ''), 'Tệp của tôi') === 0) {
-                $redundantFolderIds[] = $folderId;
-            }
-        }
-        foreach ($redundantFolderIds as $redundantFolderId) {
-            foreach ($data['folders'] as &$candidate) {
-                if (($candidate['parent_id'] ?? '') === $redundantFolderId) {
-                    $candidate['parent_id'] = $rootId;
-                }
-            }
-            unset($candidate);
-            foreach ($data['files'] as &$file) {
-                if (($file['folder_id'] ?? '') === $redundantFolderId) {
-                    $file['folder_id'] = $rootId;
-                }
-            }
-            unset($file);
-            unset($data['folders'][$redundantFolderId]);
-        }
-    }
-    foreach ($data['files'] as &$file) {
-        if (!isset($file['folder_id'])) $file['folder_id'] = 'root-' . $file['owner_id'];
-    }
-    foreach ($data['shares'] as &$share) {
-        normalizeShare($share);
-    }
-}
-
 function resetStore(): void {
     if (dbDriver() === 'sqlite' && !is_dir(dirname(DB_FILE))) mkdir(dirname(DB_FILE), 0770, true);
     if (!is_dir(FILE_ROOT)) mkdir(FILE_ROOT, 0770, true);
     foreach (glob(FILE_ROOT . '/*') ?: [] as $path) {
         if (is_file($path)) unlink($path);
     }
-    $data = seedData();
     $db = database();
     createSchema($db);
     $db->beginTransaction();
-    arrayToDatabase($db, $data);
-    $db->commit();
-    foreach ($data['files'] as $file) {
-        file_put_contents(FILE_ROOT . '/' . $file['stored_name'], "OpenShare demo file {$file['id']}\n", LOCK_EX);
+    foreach (['rate_limits','share_acceptances','share_queue','access_logs','shares','files','folders','users'] as $table) {
+        $db->exec("DELETE FROM {$table}");
     }
+    $db->commit();
 }
 
 function readStore(): array {
     $db = database();
-    createSchema($db);
-    if ((int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn() === 0) {
-        $db->beginTransaction();
-        arrayToDatabase($db, seedData());
-        $db->commit();
-    }
     return databaseToArray($db);
 }
 
 function withStore(callable $callback): mixed {
     $db = database();
-    createSchema($db);
-    $db->beginTransaction();
-    if ((int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn() === 0) {
-        arrayToDatabase($db, seedData());
+    beginImmediate($db);
+    try {
+        $data = databaseToArray($db);
+        $result = $callback($data);
+        arrayToDatabase($db, $data);
+        $db->commit();
+        return $result;
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
     }
-    $data = databaseToArray($db);
-    $result = $callback($data);
-    arrayToDatabase($db, $data);
-    $db->commit();
-    return $result;
+}
+
+function beginImmediate(PDO $db): void {
+    $db->beginTransaction();
+}
+
+function clientIp(): string {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    return is_string($ip) && $ip !== '' ? substr($ip, 0, 45) : '127.0.0.1';
+}
+
+function findUserByEmailSql(string $email): ?array {
+    $needle = strtolower(trim($email));
+    if ($needle === '') return null;
+    $stmt = database()->prepare('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1');
+    $stmt->execute([$needle]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $row['quota'] = (int)$row['quota'];
+    return $row;
+}
+
+function systemHasAdmin(): bool {
+    return (bool)database()->query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1")->fetchColumn();
+}
+
+function userUsageBytes(string $userId): int {
+    $stmt = database()->prepare('SELECT COALESCE(SUM(size), 0) FROM files WHERE owner_id = ?');
+    $stmt->execute([$userId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function countPendingInvitationsForUser(string $userId): int {
+    $nowIso = date(DATE_ATOM);
+    $stmt = database()->prepare(
+        'SELECT COUNT(*) FROM shares s
+         INNER JOIN files f ON f.id = s.file_id
+         LEFT JOIN share_acceptances sa ON sa.share_id = s.id AND sa.user_id = ?
+         WHERE s.recipient_id = ? AND s.owner_id <> ?
+           AND f.deleted_at IS NULL
+           AND s.revoked_at IS NULL AND s.expires_at > ?
+           AND s.downloads < s.max_downloads AND sa.user_id IS NULL'
+    );
+    $stmt->execute([$userId, $userId, $userId, $nowIso]);
+    return (int)$stmt->fetchColumn();
+}
+
+function logActivity(PDO $db, string $action, string $userId, string $fileId = '', bool $success = true): void {
+    $stmt = $db->prepare('INSERT INTO access_logs (id, at, action, user_id, file_id, success) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([bin2hex(random_bytes(6)), date(DATE_ATOM), $action, $userId, $fileId, $success ? 1 : 0]);
+}
+
+function streamFileResponse(string $path, string $mime, string $downloadName, string $disposition = 'attachment'): never {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    $cleanAsciiName = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $downloadName);
+    header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
+    header('Content-Length: ' . filesize($path));
+    header('Content-Disposition: ' . $disposition . '; filename="' . $cleanAsciiName . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
+    $handle = fopen($path, 'rb');
+    if ($handle !== false) {
+        while (!feof($handle)) {
+            echo fread($handle, 65536);
+            flush();
+        }
+        fclose($handle);
+    }
+    exit;
+}
+
+function requestDownloadSlotSql(PDO $db, string $shareId, string $userId, int $now): array {
+    $stmt = $db->prepare('SELECT * FROM shares WHERE id = ? LIMIT 1');
+    $stmt->execute([$shareId]);
+    $share = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$share || $share['revoked_at'] !== null || strtotime((string)$share['expires_at']) <= $now) {
+        return ['status' => 'invalid'];
+    }
+    $remaining = (int)$share['max_downloads'] - (int)$share['downloads'];
+    if ($remaining > 1) {
+        $db->prepare('UPDATE shares SET downloads = downloads + 1 WHERE id = ?')->execute([$shareId]);
+        return ['status' => 'granted'];
+    }
+
+    $qStmt = $db->prepare("SELECT id, user_id FROM share_queue WHERE share_id = ? AND status = 'waiting' ORDER BY requested_at ASC, id ASC");
+    $qStmt->execute([$shareId]);
+    $waiting = $qStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $position = null;
+    foreach ($waiting as $idx => $entry) {
+        if ($entry['user_id'] === $userId) {
+            $position = $idx + 1;
+            break;
+        }
+    }
+    if ($position === null) {
+        $entryId = bin2hex(random_bytes(6));
+        $db->prepare('INSERT INTO share_queue (id, share_id, user_id, requested_at, status) VALUES (?, ?, ?, ?, ?)')
+           ->execute([$entryId, $shareId, $userId, microtime(true), 'waiting']);
+        $waiting[] = ['id' => $entryId, 'user_id' => $userId];
+        $position = count($waiting);
+    }
+
+    $head = $waiting[0] ?? null;
+    if ($head && $head['user_id'] === $userId && $remaining === 1) {
+        $db->prepare("UPDATE share_queue SET status = 'granted' WHERE id = ?")->execute([$head['id']]);
+        $db->prepare('UPDATE shares SET downloads = downloads + 1 WHERE id = ?')->execute([$shareId]);
+        return ['status' => 'granted', 'position' => 1];
+    }
+    return ['status' => 'queued', 'position' => $position];
 }
 
 function logEvent(array &$data, string $action, string $userId, string $fileId = '', bool $success = true): void {
@@ -507,7 +627,7 @@ function userUsage(array $data, string $userId): int {
 }
 
 function allowedExtension(string $name): bool {
-    return in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), ['pdf','txt','jpg','jpeg','png','zip','docx'], true);
+    return array_key_exists(strtolower(pathinfo($name, PATHINFO_EXTENSION)), ALLOWED_MIME_TYPES);
 }
 
 function detectedMimeIsAllowed(string $name, string $path): bool {
@@ -589,35 +709,43 @@ function countPendingInvitations(array $data, string $userId): int {
 }
 
 function isRateLimited(string $action, int $maxAttempts = 5, int $decaySeconds = 300): bool {
-    $key = 'rate_limit_' . $action;
-    $record = $_SESSION[$key] ?? null;
-    if (!is_array($record)) return false;
+    $db = database();
+    $stmt = $db->prepare('SELECT attempts, window_start FROM rate_limits WHERE action_key = ? LIMIT 1');
+    $stmt->execute([$action]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return false;
     $now = time();
-    if ($now - ($record['start'] ?? 0) > $decaySeconds) {
-        unset($_SESSION[$key]);
+    if ($now - (int)$row['window_start'] > $decaySeconds) {
+        $db->prepare('DELETE FROM rate_limits WHERE action_key = ?')->execute([$action]);
         return false;
     }
-    return ($record['count'] ?? 0) >= $maxAttempts;
+    return (int)$row['attempts'] >= $maxAttempts;
 }
 
-function recordFailedAttempt(string $action): void {
-    $key = 'rate_limit_' . $action;
+function recordFailedAttempt(string $action, int $decaySeconds = 300): void {
+    $db = database();
     $now = time();
-    if (!isset($_SESSION[$key]) || ($now - ($_SESSION[$key]['start'] ?? 0) > 300)) {
-        $_SESSION[$key] = ['count' => 1, 'start' => $now];
+    $stmt = $db->prepare('SELECT attempts, window_start FROM rate_limits WHERE action_key = ? LIMIT 1');
+    $stmt->execute([$action]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || ($now - (int)$row['window_start'] > $decaySeconds)) {
+        $db->prepare('DELETE FROM rate_limits WHERE action_key = ?')->execute([$action]);
+        $db->prepare('INSERT INTO rate_limits (action_key, attempts, window_start) VALUES (?, 1, ?)')->execute([$action, $now]);
     } else {
-        $_SESSION[$key]['count'] = ((int)$_SESSION[$key]['count']) + 1;
+        $db->prepare('UPDATE rate_limits SET attempts = attempts + 1 WHERE action_key = ?')->execute([$action]);
     }
 }
 
 function clearRateLimit(string $action): void {
-    unset($_SESSION['rate_limit_' . $action]);
+    database()->prepare('DELETE FROM rate_limits WHERE action_key = ?')->execute([$action]);
 }
 
 function getRateLimitRemainingSeconds(string $action, int $decaySeconds = 300): int {
-    $key = 'rate_limit_' . $action;
-    $start = (int)($_SESSION[$key]['start'] ?? time());
-    return max(1, $decaySeconds - (time() - $start));
+    $stmt = database()->prepare('SELECT window_start FROM rate_limits WHERE action_key = ? LIMIT 1');
+    $stmt->execute([$action]);
+    $start = $stmt->fetchColumn();
+    if ($start === false) return 1;
+    return max(1, $decaySeconds - (time() - (int)$start));
 }
 
 function normalizeShare(array &$share): void {
@@ -681,65 +809,30 @@ function safeStoredPath(array $file): ?string {
     return str_starts_with($path, $root . DIRECTORY_SEPARATOR) ? $path : null;
 }
 
-function docxTempDirectory(): string {
-    $directory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'openshare-docx-' . bin2hex(random_bytes(8));
-    if (!mkdir($directory, 0700, true) && !is_dir($directory)) {
-        throw new RuntimeException('Không thể tạo thư mục tạm để xử lý DOCX.');
-    }
-    return $directory;
-}
-
-function removeDocxTempDirectory(string $directory): void {
-    foreach (glob($directory . DIRECTORY_SEPARATOR . '*') ?: [] as $path) {
-        if (is_dir($path)) {
-            removeDocxTempDirectory($path);
-        } elseif (is_file($path)) {
-            unlink($path);
-        }
-    }
-    if (is_dir($directory)) {
-        rmdir($directory);
-    }
-}
-
-function docxCommand(string $command, string $directory): void {
-    $output = [];
-    $exitCode = 0;
-    exec('cd /d ' . escapeshellarg($directory) . ' && 7z.exe ' . $command . ' 2>&1', $output, $exitCode);
-    if ($exitCode !== 0) {
-        throw new RuntimeException('Không thể xử lý DOCX. Hãy đảm bảo 7-Zip (7z.exe) có trong PATH.');
-    }
-}
-
 function readDocxParagraphs(string $path): array {
-    $directory = docxTempDirectory();
-    try {
-        docxCommand('x -y -o' . escapeshellarg($directory) . ' ' . escapeshellarg($path) . ' word/document.xml', $directory);
-        $xmlPath = $directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'document.xml';
-        if (!is_file($xmlPath)) {
-            throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
-        }
-        $document = new DOMDocument();
-        $document->load($xmlPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
-        $xpath = new DOMXPath($document);
-        $paragraphs = [];
-        foreach ($xpath->query('//*[local-name()="p"]') ?: [] as $paragraph) {
-            $text = '';
-            foreach ($xpath->query('.//*[local-name()="t" or local-name()="tab" or local-name()="br"]', $paragraph) ?: [] as $node) {
-                if ($node->localName === 'tab') {
-                    $text .= "\t";
-                } elseif ($node->localName === 'br') {
-                    $text .= "\n";
-                } else {
-                    $text .= $node->textContent;
-                }
-            }
-            $paragraphs[] = $text;
-        }
-        return $paragraphs ?: [''];
-    } finally {
-        removeDocxTempDirectory($directory);
+    $entries = zipReadEntries($path, static fn(string $name): bool => $name === 'word/document.xml');
+    $xml = $entries['word/document.xml'] ?? null;
+    if ($xml === null) {
+        throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
     }
+    $document = new DOMDocument();
+    $document->loadXML($xml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+    $xpath = new DOMXPath($document);
+    $paragraphs = [];
+    foreach ($xpath->query('//*[local-name()="p"]') ?: [] as $paragraph) {
+        $text = '';
+        foreach ($xpath->query('.//*[local-name()="t" or local-name()="tab" or local-name()="br"]', $paragraph) ?: [] as $node) {
+            if ($node->localName === 'tab') {
+                $text .= "\t";
+            } elseif ($node->localName === 'br') {
+                $text .= "\n";
+            } else {
+                $text .= $node->textContent;
+            }
+        }
+        $paragraphs[] = $text;
+    }
+    return $paragraphs ?: [''];
 }
 
 function docxTextNodeHtml(DOMNode $node, DOMXPath $xpath, array $images = []): string {
@@ -817,83 +910,78 @@ function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = []):
     return $html;
 }
 
-function docxImageMap(string $directory, string $partName): array {
-    $relsPath = dirname($partName) . DIRECTORY_SEPARATOR . '_rels' . DIRECTORY_SEPARATOR . basename($partName) . '.rels';
-    if (!is_file($relsPath)) {
+function docxImageMap(array $entries, string $partName): array {
+    $relsPath = 'word/_rels/' . basename($partName) . '.rels';
+    $relsXml = $entries[$relsPath] ?? null;
+    if ($relsXml === null) {
         return [];
     }
     $rels = new DOMDocument();
-    if (!$rels->load($relsPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+    if (!$rels->loadXML($relsXml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
         return [];
     }
     $map = [];
     foreach ($rels->getElementsByTagNameNS('http://schemas.openxmlformats.org/package/2006/relationships', 'Relationship') as $relationship) {
-        $target = (string)$relationship->getAttribute('Target');
+        $target = ltrim(str_replace('\\', '/', (string)$relationship->getAttribute('Target')), '/');
         $id = (string)$relationship->getAttribute('Id');
         if ($id === '' || !str_contains($target, 'media/')) {
             continue;
         }
-        $imagePath = dirname($partName) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $target);
-        $absolutePath = $directory . DIRECTORY_SEPARATOR . $imagePath;
-        if (!is_file($absolutePath)) {
+        $entryKey = str_starts_with($target, 'word/') ? $target : 'word/' . $target;
+        $rawImage = $entries[$entryKey] ?? null;
+        if ($rawImage === null) {
             continue;
         }
-        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($entryKey, PATHINFO_EXTENSION));
         $mime = match ($extension) {
             'jpg', 'jpeg' => 'image/jpeg',
             'gif' => 'image/gif',
             'svg' => 'image/svg+xml',
             default => 'image/' . $extension,
         };
-        $map[$id] = 'data:' . $mime . ';base64,' . base64_encode((string)file_get_contents($absolutePath));
+        $map[$id] = 'data:' . $mime . ';base64,' . base64_encode($rawImage);
     }
     return $map;
 }
 
 function readDocxHtml(string $path): string {
-    $directory = docxTempDirectory();
-    try {
-        docxCommand('x -y -o' . escapeshellarg($directory) . ' ' . escapeshellarg($path) . ' word', $directory);
-        $documentPath = $directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'document.xml';
-        if (!is_file($documentPath)) {
-            throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
-        }
-        $document = new DOMDocument();
-        if (!$document->load($documentPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
-            throw new RuntimeException('Không thể đọc cấu trúc DOCX.');
-        }
-        $xpath = new DOMXPath($document);
-        $body = $xpath->query('//*[local-name()="body"]')->item(0);
-        if (!$body) {
-            throw new RuntimeException('DOCX không chứa phần nội dung chính.');
-        }
-        $html = docxBlockHtml($body, $xpath, docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . 'document.xml'));
-        foreach (glob($directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'header*.xml') ?: [] as $headerPath) {
+    $entries = zipReadEntries($path, static fn(string $name): bool => str_starts_with($name, 'word/'));
+    $documentXml = $entries['word/document.xml'] ?? null;
+    if ($documentXml === null) {
+        throw new RuntimeException('DOCX không chứa nội dung văn bản hợp lệ.');
+    }
+    $document = new DOMDocument();
+    if (!$document->loadXML($documentXml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+        throw new RuntimeException('Không thể đọc cấu trúc DOCX.');
+    }
+    $xpath = new DOMXPath($document);
+    $body = $xpath->query('//*[local-name()="body"]')->item(0);
+    if (!$body) {
+        throw new RuntimeException('DOCX không chứa phần nội dung chính.');
+    }
+    $html = docxBlockHtml($body, $xpath, docxImageMap($entries, 'word/document.xml'));
+    foreach ($entries as $entryName => $entryXml) {
+        if (preg_match('#^word/header[^/]*\.xml$#', $entryName)) {
             $header = new DOMDocument();
-            if ($header->load($headerPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+            if ($header->loadXML($entryXml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
                 $headerXpath = new DOMXPath($header);
                 $headerBody = $headerXpath->query('//*[local-name()="hdr"]')->item(0);
                 if ($headerBody) {
-                    $headerImages = docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . basename($headerPath));
-                    $html = '<div class="docx-header">' . docxBlockHtml($headerBody, $headerXpath, $headerImages) . '</div>' . $html;
+                    $html = '<div class="docx-header">' . docxBlockHtml($headerBody, $headerXpath, docxImageMap($entries, $entryName)) . '</div>' . $html;
                 }
             }
-        }
-        foreach (glob($directory . DIRECTORY_SEPARATOR . 'word' . DIRECTORY_SEPARATOR . 'footer*.xml') ?: [] as $footerPath) {
+        } elseif (preg_match('#^word/footer[^/]*\.xml$#', $entryName)) {
             $footer = new DOMDocument();
-            if ($footer->load($footerPath, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+            if ($footer->loadXML($entryXml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
                 $footerXpath = new DOMXPath($footer);
                 $footerBody = $footerXpath->query('//*[local-name()="ftr"]')->item(0);
                 if ($footerBody) {
-                    $footerImages = docxImageMap($directory, 'word' . DIRECTORY_SEPARATOR . basename($footerPath));
-                    $html .= '<div class="docx-footer">' . docxBlockHtml($footerBody, $footerXpath, $footerImages) . '</div>';
+                    $html .= '<div class="docx-footer">' . docxBlockHtml($footerBody, $footerXpath, docxImageMap($entries, $entryName)) . '</div>';
                 }
             }
         }
-        return $html !== '' ? $html : '<p>&nbsp;</p>';
-    } finally {
-        removeDocxTempDirectory($directory);
     }
+    return $html !== '' ? $html : '<p>&nbsp;</p>';
 }
 
 function buildDocxDocumentXml(string $content): string {
@@ -914,31 +1002,7 @@ function saveDocxContent(string $path, string $content): void {
     if (strlen($content) > 1_000_000) {
         throw new RuntimeException('Nội dung DOCX không được vượt quá 1 MB.');
     }
-    $directory = docxTempDirectory();
-    try {
-        $xmlDirectory = $directory . DIRECTORY_SEPARATOR . 'word';
-        if (!mkdir($xmlDirectory, 0700, true)) {
-            throw new RuntimeException('Không thể chuẩn bị dữ liệu DOCX.');
-        }
-        if (!copy($path, $directory . DIRECTORY_SEPARATOR . 'edited.docx')) {
-            throw new RuntimeException('Không thể tạo bản DOCX tạm.');
-        }
-        if (file_put_contents($xmlDirectory . DIRECTORY_SEPARATOR . 'document.xml', buildDocxDocumentXml($content), LOCK_EX) === false) {
-            throw new RuntimeException('Không thể ghi nội dung DOCX.');
-        }
-        docxCommand('u ' . escapeshellarg($directory . DIRECTORY_SEPARATOR . 'edited.docx') . ' ' . escapeshellarg('word' . DIRECTORY_SEPARATOR . 'document.xml'), $directory);
-        if (!copy($directory . DIRECTORY_SEPARATOR . 'edited.docx', $path)) {
-            throw new RuntimeException('Không thể lưu DOCX đã chỉnh sửa.');
-        }
-    } finally {
-        removeDocxTempDirectory($directory);
-    }
-}
-
-function resetDemoFiles(): void {
-    foreach (glob(FILE_ROOT . '/*') ?: [] as $path) {
-        if (is_file($path)) unlink($path);
-    }
+    zipReplaceEntry($path, 'word/document.xml', buildDocxDocumentXml($content));
 }
 
 function layoutStart(string $title): void {
@@ -951,6 +1015,7 @@ function layoutStart(string $title): void {
     $isShared = $currentPath === '/shared.php';
     $isLogs = $currentPath === '/logs.php';
     $isReport = $currentPath === '/report.php';
+    $isTrash = $currentPath === '/trash.php';
 
     $navClass = static fn(bool $active): string => $active ? ' class="nav-item active"' : ' class="nav-item"';
 
@@ -959,11 +1024,10 @@ function layoutStart(string $title): void {
     $usedPercent = 0;
     $roleName = 'Người dùng';
     if ($user) {
-        $data = readStore();
-        $usedBytes = userUsage($data, $user['id']);
+        $usedBytes = userUsageBytes($user['id']);
         $quotaBytes = (int)($user['quota'] ?? USER_QUOTA_BYTES);
         $usedPercent = $quotaBytes > 0 ? min(100, round(($usedBytes / $quotaBytes) * 100)) : 0;
-        $pendingInvites = countPendingInvitations($data, $user['id']);
+        $pendingInvites = countPendingInvitationsForUser($user['id']);
         $roleName = match($user['role'] ?? '') {
             'owner' => 'Chủ tệp',
             'admin' => 'Quản trị viên',
@@ -1030,6 +1094,7 @@ function layoutStart(string $title): void {
         echo '          <span class="role-pill ' . h($user['role']) . '">' . h($roleName) . '</span>';
         echo '        </div>';
         echo '        <div class="dropdown-divider"></div>';
+        echo '        <a href="/profile.php" class="dropdown-item">👤 Hồ sơ & Mật khẩu</a>';
         echo '        <a href="/report.php" class="dropdown-item">📊 Báo cáo lưu trữ (' . $usedPercent . '%)</a>';
         echo '        <a href="/logs.php" class="dropdown-item">⏱ Nhật ký hoạt động</a>';
         echo '        <div class="dropdown-divider"></div>';
@@ -1051,7 +1116,7 @@ function layoutStart(string $title): void {
         echo '        <button type="button" data-new-action="file">📄 <span>Tải tệp lên</span></button>';
         echo '        <button type="button" data-new-action="folder-upload">📂 <span>Tải thư mục lên</span></button>';
         echo '      </div>';
-        echo '      <input type="file" id="new-file-input" class="visually-hidden" multiple accept=".pdf,.txt,.jpg,.jpeg,.png,.zip,.docx">';
+        echo '      <input type="file" id="new-file-input" class="visually-hidden" multiple accept="' . h('.' . implode(',.', array_keys(ALLOWED_MIME_TYPES))) . '">';
         echo '      <input type="file" id="new-folder-input" class="visually-hidden" webkitdirectory directory multiple>';
         echo '    </div>';
         echo '    <nav class="sidebar-nav">';
@@ -1060,6 +1125,7 @@ function layoutStart(string $title): void {
         echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">👥</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
         echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">⏱</span><span>Hoạt động</span></a>';
         echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">📊</span><span>Bộ nhớ lưu trữ</span></a>';
+        echo '      <a href="/trash.php"' . $navClass($isTrash) . '><span class="nav-icon">🗑</span><span>Thùng rác</span></a>';
         echo '    </nav>';
         echo '    <div class="sidebar-storage">';
         echo '      <div class="storage-meta">';

@@ -29,43 +29,29 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $errors[] = 'Mật khẩu xác nhận không khớp.';
     }
 
-    $data = readStore();
-    foreach ($data['users'] as $existing) {
-        if ($existing['email'] === $email) {
-            $errors[] = 'Email này đã tồn tại trong hệ thống.';
-            break;
-        }
+    if (findUserByEmailSql($email) !== null) {
+        $errors[] = 'Email này đã tồn tại trong hệ thống.';
     }
 
     if (!$errors) {
-        $hasAdmin = false;
-        foreach ($data['users'] as $u) {
-            if (($u['role'] ?? '') === 'admin') {
-                $hasAdmin = true;
-                break;
-            }
-        }
-        $assignedRole = !$hasAdmin ? 'admin' : 'recipient';
-
         $id = bin2hex(random_bytes(8));
-        withStore(function (array &$store) use ($id, $name, $email, $password, $assignedRole): void {
-            $store['users'][$id] = [
-                'id' => $id,
-                'name' => $name,
-                'email' => $email,
-                'role' => $assignedRole,
-                'password' => password_hash($password, PASSWORD_DEFAULT),
-                'quota' => USER_QUOTA_BYTES,
-            ];
-            $store['folders']['root-' . $id] = [
-                'id' => 'root-' . $id,
-                'owner_id' => $id,
-                'name' => 'Tệp của tôi',
-                'parent_id' => null,
-                'created_at' => date(DATE_ATOM),
-            ];
-            logEvent($store, 'register', $id);
-        });
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $db = database();
+        beginImmediate($db);
+        $assignedRole = 'recipient';
+        try {
+            $hasAdmin = (bool)$db->query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1")->fetchColumn();
+            $assignedRole = !$hasAdmin ? 'admin' : 'recipient';
+            $db->prepare('INSERT INTO users (id, name, email, role, password, quota) VALUES (?, ?, ?, ?, ?, ?)')
+               ->execute([$id, $name, $email, $assignedRole, $hash, USER_QUOTA_BYTES]);
+            $db->prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at) VALUES (?, ?, ?, ?, ?)')
+               ->execute(['root-' . $id, $id, 'Tệp của tôi', null, date(DATE_ATOM)]);
+            logActivity($db, 'register', $id);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $e;
+        }
 
         if ($assignedRole === 'admin') {
             flash('Đăng ký tài khoản Quản trị viên thành công! Bạn có thể đăng nhập ngay.');
@@ -76,14 +62,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-$storeData = readStore();
-$systemHasAdmin = false;
-foreach ($storeData['users'] as $u) {
-    if (($u['role'] ?? '') === 'admin') {
-        $systemHasAdmin = true;
-        break;
-    }
-}
+$systemHasAdmin = systemHasAdmin();
 
 layoutStart('Đăng ký');
 ?>

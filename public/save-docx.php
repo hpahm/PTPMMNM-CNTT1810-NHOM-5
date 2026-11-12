@@ -22,11 +22,13 @@ if ($csrfToken === '' || !hash_equals((string)($_SESSION['csrf'] ?? ''), $csrfTo
 
 $fileId = is_string($payload['file'] ?? null) ? trim($payload['file']) : '';
 $content = is_string($payload['content'] ?? null) ? $payload['content'] : '';
-$data = readStore();
-$file = $data['files'][$fileId] ?? null;
+$db = database();
+$fStmt = $db->prepare('SELECT * FROM files WHERE id = ? LIMIT 1');
+$fStmt->execute([$fileId]);
+$file = $fStmt->fetch(PDO::FETCH_ASSOC);
 $path = $file ? safeStoredPath($file) : null;
 
-if (!$user || !$file || !$path || strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION)) !== 'docx' || !userCanManageFile($user, $file)) {
+if (!$user || !$file || !$path || strtolower(pathinfo((string)$file['original_name'], PATHINFO_EXTENSION)) !== 'docx' || !userCanManageFile($user, $file)) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'Bạn không có quyền chỉnh sửa tệp DOCX này.'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -35,10 +37,17 @@ if (!$user || !$file || !$path || strtolower(pathinfo($file['original_name'], PA
 try {
     saveDocxContent($path, $content);
     $size = filesize($path);
-    withStore(function (array &$store) use ($fileId, $user, $size): void {
-        $store['files'][$fileId]['size'] = $size === false ? $store['files'][$fileId]['size'] : $size;
-        logEvent($store, 'docx_edit', $user['id'], $fileId);
-    });
+    beginImmediate($db);
+    try {
+        if ($size !== false) {
+            $db->prepare('UPDATE files SET size = ? WHERE id = ?')->execute([(int)$size, $fileId]);
+        }
+        logActivity($db, 'docx_edit', $user['id'], $fileId);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
     echo json_encode(['ok' => true, 'size' => $size], JSON_UNESCAPED_UNICODE);
 } catch (RuntimeException $exception) {
     http_response_code(500);

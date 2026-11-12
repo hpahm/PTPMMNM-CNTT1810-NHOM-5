@@ -6,8 +6,10 @@ startApp();
 
 $user = requireLogin();
 $fileId = get('file');
-$data = readStore();
-$file = $data['files'][$fileId] ?? null;
+$db = database();
+$fStmt = $db->prepare('SELECT * FROM files WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+$fStmt->execute([$fileId]);
+$file = $fStmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$file || !userCanManageFile($user, $file)) {
     http_response_code(404);
@@ -16,29 +18,31 @@ if (!$file || !userCanManageFile($user, $file)) {
 
 $path = FILE_ROOT . '/' . basename((string)$file['stored_name']);
 $fileExists = is_file($path);
-$active = $fileExists
-    ? array_filter($data['shares'], fn($s) => $s['file_id'] === $fileId && validShare($s, time()))
-    : [];
+$hasActiveShare = false;
+if ($fileExists) {
+    $sStmt = $db->prepare('SELECT 1 FROM shares WHERE file_id = ? AND revoked_at IS NULL AND expires_at > ? AND downloads < max_downloads LIMIT 1');
+    $sStmt->execute([$fileId, date(DATE_ATOM)]);
+    $hasActiveShare = (bool)$sStmt->fetchColumn();
+}
 
-if (!empty($active)) {
+if ($hasActiveShare) {
     http_response_code(409);
     exit('Chỉ được xóa tệp khi không còn liên kết chia sẻ nào còn hiệu lực. Vui lòng thu hồi tất cả liên kết trước khi xóa.');
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verifyCsrf();
-    withStore(function (array &$store) use ($fileId, $user): void {
-        if (isset($store['files'][$fileId])) {
-            unset($store['files'][$fileId]);
-            logEvent($store, 'file_deleted', $user['id'], $fileId);
-        }
-    });
-
-    if ($fileExists && !unlink($path)) {
-        throw new RuntimeException('Không thể xóa tệp vật lý trên máy chủ.');
+    beginImmediate($db);
+    try {
+        $db->prepare('UPDATE files SET deleted_at = ? WHERE id = ?')->execute([date(DATE_ATOM), $fileId]);
+        logActivity($db, 'file_trashed', $user['id'], $fileId);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
     }
 
-    flash('Đã xóa tệp thành công!');
+    flash('Đã chuyển tệp vào Thùng rác!');
     redirect('/');
 }
 

@@ -13,17 +13,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 verifyCsrf();
 $shareId = post('share');
 $declined = false;
+$db = database();
 
-withStore(function (array &$data) use ($shareId, $user, &$declined): void {
-    $share = $data['shares'][$shareId] ?? null;
-    if (!$share || $share['recipient_id'] !== $user['id'] || $share['owner_id'] === $user['id']) {
-        return;
+beginImmediate($db);
+try {
+    $sStmt = $db->prepare('SELECT * FROM shares WHERE id = ? LIMIT 1');
+    $sStmt->execute([$shareId]);
+    $share = $sStmt->fetch(PDO::FETCH_ASSOC);
+    if ($share && $share['recipient_id'] === $user['id'] && $share['owner_id'] !== $user['id']) {
+        $db->prepare('UPDATE shares SET revoked_at = ? WHERE id = ?')->execute([date(DATE_ATOM), $shareId]);
+        logActivity($db, 'share_declined', $user['id'], $share['file_id']);
+        $declined = true;
     }
-    // Thu hồi liên kết riêng này
-    $data['shares'][$shareId]['revoked_at'] = date(DATE_ATOM);
-    logEvent($data, 'share_declined', $user['id'], $share['file_id']);
-    $declined = true;
-});
+    $db->commit();
+} catch (Throwable $e) {
+    if ($db->inTransaction()) $db->rollBack();
+    throw $e;
+}
 
 if (!$declined) {
     http_response_code(403);

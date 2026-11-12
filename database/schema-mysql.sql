@@ -17,8 +17,10 @@ CREATE TABLE IF NOT EXISTS folders (
     name VARCHAR(160) NOT NULL,
     parent_id VARCHAR(64) NULL,
     created_at VARCHAR(40) NOT NULL,
-    CONSTRAINT folders_owner_name_uq UNIQUE (owner_id, name),     
-    CONSTRAINT folders_owner_fk FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    deleted_at VARCHAR(40) NULL,
+    CONSTRAINT folders_owner_name_uq UNIQUE (owner_id, parent_id, name),     
+    CONSTRAINT folders_owner_fk FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    KEY idx_folders_owner_parent (owner_id, parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS files (
@@ -29,7 +31,9 @@ CREATE TABLE IF NOT EXISTS files (
     stored_name VARCHAR(255) NOT NULL UNIQUE,
     size BIGINT NOT NULL,
     mime VARCHAR(255) NOT NULL,
+    file_hash VARCHAR(64) NULL,
     created_at VARCHAR(40) NOT NULL,
+    deleted_at VARCHAR(40) NULL,
     download_count INT NOT NULL DEFAULT 0,
     CONSTRAINT files_size_chk CHECK (size > 0),
     CONSTRAINT files_download_count_chk CHECK (download_count >= 0),
@@ -87,4 +91,10 @@ CREATE TABLE IF NOT EXISTS share_acceptances (
     PRIMARY KEY (share_id, user_id),
     CONSTRAINT share_acceptances_share_fk FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
     CONSTRAINT share_acceptances_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+    action_key VARCHAR(191) NOT NULL PRIMARY KEY,
+    attempts INT NOT NULL DEFAULT 0,
+    window_start INT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

@@ -10,15 +10,15 @@ IF OBJECT_ID(N'users', N'U') IS NULL CREATE TABLE users (
 );
 IF OBJECT_ID(N'folders', N'U') IS NULL CREATE TABLE folders (
     id NVARCHAR(64) NOT NULL PRIMARY KEY, owner_id NVARCHAR(64) NOT NULL,
-    name NVARCHAR(80) NOT NULL, parent_id NVARCHAR(64) NULL, created_at NVARCHAR(40) NOT NULL,
-    CONSTRAINT UQ_folders_owner_name UNIQUE (owner_id, name),
+    name NVARCHAR(80) NOT NULL, parent_id NVARCHAR(64) NULL, created_at NVARCHAR(40) NOT NULL, deleted_at NVARCHAR(40) NULL,
+    CONSTRAINT UQ_folders_owner_name UNIQUE (owner_id, parent_id, name),
     CONSTRAINT FK_folders_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 IF OBJECT_ID(N'files', N'U') IS NULL CREATE TABLE files (
     id NVARCHAR(64) NOT NULL PRIMARY KEY, owner_id NVARCHAR(64) NOT NULL,
     folder_id NVARCHAR(64) NOT NULL, original_name NVARCHAR(255) NOT NULL,
     stored_name NVARCHAR(255) NOT NULL UNIQUE, size BIGINT NOT NULL, mime NVARCHAR(255) NOT NULL,
-    created_at NVARCHAR(40) NOT NULL, download_count INT NOT NULL DEFAULT 0,
+    file_hash NVARCHAR(64) NULL, created_at NVARCHAR(40) NOT NULL, deleted_at NVARCHAR(40) NULL, download_count INT NOT NULL DEFAULT 0,
     CONSTRAINT FK_files_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT FK_files_folder FOREIGN KEY (folder_id) REFERENCES folders(id)
 );
@@ -45,7 +45,15 @@ IF OBJECT_ID(N'share_acceptances', N'U') IS NULL CREATE TABLE share_acceptances 
     CONSTRAINT FK_acceptances_share FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
     CONSTRAINT FK_acceptances_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+IF OBJECT_ID(N'rate_limits', N'U') IS NULL CREATE TABLE rate_limits (
+    action_key NVARCHAR(191) NOT NULL PRIMARY KEY,
+    attempts INT NOT NULL DEFAULT 0,
+    window_start INT NOT NULL
+);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_files_owner') CREATE INDEX idx_files_owner ON files(owner_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_files_owner_folder') CREATE INDEX idx_files_owner_folder ON files(owner_id, folder_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_folders_owner_parent') CREATE INDEX idx_folders_owner_parent ON folders(owner_id, parent_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_shares_file') CREATE INDEX idx_shares_file ON shares(file_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_shares_recipient') CREATE INDEX idx_shares_recipient ON shares(recipient_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_logs_file') CREATE INDEX idx_logs_file ON access_logs(file_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_logs_at') CREATE INDEX idx_logs_at ON access_logs(at);

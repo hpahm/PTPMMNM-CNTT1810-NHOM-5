@@ -5,18 +5,22 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = requireLogin();
-$data = readStore();
-
-$rows = array_filter($data['files'], fn($f) => $user['role'] === 'admin' || $f['owner_id'] === $user['id']);
+$db = database();
 
 if (get('format') === 'csv') {
+    if ($user['role'] === 'admin') {
+        $stmt = $db->query('SELECT id, original_name, size, download_count, created_at FROM files ORDER BY created_at DESC');
+    } else {
+        $stmt = $db->prepare('SELECT id, original_name, size, download_count, created_at FROM files WHERE owner_id = ? ORDER BY created_at DESC');
+        $stmt->execute([$user['id']]);
+    }
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=openshare-report.csv');
     $out = fopen('php://output', 'w');
     // Xuất BOM UTF-8 để Excel đọc tiếng Việt không bị lỗi font
     fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
     fputcsv($out, ['Mã tệp', 'Tên tệp', 'Kích thước (Bytes)', 'Dung lượng định dạng', 'Lượt tải', 'Ngày tạo']);
-    foreach ($rows as $f) {
+    while ($f = $stmt->fetch(PDO::FETCH_ASSOC)) {
         fputcsv($out, [
             $f['id'],
             $f['original_name'],
@@ -30,7 +34,19 @@ if (get('format') === 'csv') {
     exit;
 }
 
-$usage = userUsage($data, $user['id']);
+if ($user['role'] === 'admin') {
+    $rows = $db->query('SELECT * FROM files WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
+    $agg = $db->query('SELECT COUNT(*) AS cnt, COALESCE(SUM(download_count), 0) AS dl FROM files WHERE deleted_at IS NULL')->fetch(PDO::FETCH_ASSOC);
+} else {
+    $rStmt = $db->prepare('SELECT * FROM files WHERE owner_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 500');
+    $rStmt->execute([$user['id']]);
+    $rows = $rStmt->fetchAll(PDO::FETCH_ASSOC);
+    $aStmt = $db->prepare('SELECT COUNT(*) AS cnt, COALESCE(SUM(download_count), 0) AS dl FROM files WHERE owner_id = ? AND deleted_at IS NULL');
+    $aStmt->execute([$user['id']]);
+    $agg = $aStmt->fetch(PDO::FETCH_ASSOC);
+}
+
+$usage = userUsageBytes($user['id']);
 $quota = (int)($user['quota'] ?? USER_QUOTA_BYTES);
 $percent = $quota > 0 ? min(100, round(($usage / $quota) * 100)) : 0;
 $diskFree = disk_free_space(FILE_ROOT);

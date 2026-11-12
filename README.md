@@ -1,13 +1,20 @@
-# OpenShare — Chia sẻ tệp có kiểm soát quyền tải
+# OpenShare — Hệ thống chia sẻ tệp có kiểm soát quyền tải
 
-Đồ án lớn cho học phần **Phát triển phần mềm mã nguồn mở**, theo đề tài 7.
-Ứng dụng PHP thuần, không dùng framework hoặc Composer. Dữ liệu nghiệp vụ được
-lưu trong CSDL cấu hình (SQLite, MySQL hoặc SQL Server), còn tệp tải lên nằm ở
-`storage/files/`, vì vậy không thể truy cập trực tiếp qua Web.
+Đồ án học phần **Phát triển phần mềm mã nguồn mở** (Đề tài 7).
+Ứng dụng viết bằng PHP thuần (PHP 8.1+), không sử dụng framework hoặc Composer. Dữ liệu nghiệp vụ được lưu trong cơ sở dữ liệu cấu hình qua PDO (SQLite mặc định, hỗ trợ MySQL và SQL Server), toàn bộ tệp tải lên được lưu ngoài Web Root tại `storage/files/` nhằm ngăn truy cập trực tiếp qua URL.
 
-## Chạy thử
+---
 
-Sau khi clone repository, chuyển vào thư mục dự án:
+## Yêu cầu môi trường
+
+- **PHP 8.1 trở lên** với các phần mở rộng: `pdo_sqlite` (hoặc `pdo_mysql` / `pdo_sqlsrv`), `mbstring`, `xml`, `dom`, `fileinfo`, `zlib` (mặc định có sẵn trong PHP).
+- Tùy chọn: `zip` (`ZipArchive`) để tăng tốc xử lý DOCX và nén ZIP; nếu chưa bật, hệ thống tự động sử dụng bộ xử lý ZIP thuần PHP trong `src/zip.php`.
+
+---
+
+## Chạy thử trên máy cục bộ
+
+Sau khi clone repository, chuyển vào thư mục gốc dự án:
 
 ### Trên Linux / macOS / WSL (Bash)
 
@@ -26,74 +33,65 @@ bash lab.sh run
 ```
 
 Hoặc dùng file batch:
+
 ```cmd
 lab.bat test
 lab.bat run
 ```
 
-PHP cần bật phần mở rộng `pdo_sqlite` (hoặc `pdo_mysql` nếu dùng MySQL; `pdo_sqlsrv` nếu dùng SQL Server).
-Để xem trước và chỉnh sửa DOCX trực tiếp trong trình duyệt, máy chủ cần có `7z.exe`
-(7-Zip) trong `PATH`. Khi lưu, nội dung văn bản và xuống dòng được giữ lại; định dạng
-nâng cao của tài liệu sẽ được chuẩn hóa theo trình soạn thảo tích hợp.
-Mặc định ứng dụng dùng SQLite tại `storage/openshare.sqlite`. Có thể chuyển
-sang MySQL bằng `OPENSHARE_DB_DRIVER=mysql` hoặc SQL Server bằng
-`OPENSHARE_DB_DRIVER=sqlsrv`. Tham khảo [database/README.md](database/README.md)
-để xem các biến kết nối.
+Truy cập <http://127.0.0.1:8127> và vào `/register.php` để đăng ký tài khoản sử dụng. Tài khoản đăng ký đầu tiên sẽ tự động được cấp quyền **Quản trị viên (`admin`)**; các tài khoản sau nhận vai trò người dùng thông thường.
 
-Thiết kế bảng và quan hệ nằm trong [database/README.md](database/README.md)
-và [database/schema.sql](database/schema.sql).
+Chạy `bash lab.sh reset` (hoặc `.\lab.ps1 reset`) để làm sạch toàn bộ CSDL và thư mục `storage/files/`. Không đưa dữ liệu thật hoặc tệp riêng tư lên kho mã nguồn.
 
-Mở <http://127.0.0.1:8127>. Tài khoản mẫu:
+---
 
-| Tài khoản | Mật khẩu | Vai trò |
-|---|---|---|
-| `owner@gmail.com` | `123` | Chủ tệp |
-| `recipient@gmail.com` | `123` | Người nhận liên kết |
-| `admin@gmail.com` | `123` | Quản trị viên |
+## Cấu hình cơ sở dữ liệu
 
-Mỗi lần chạy `bash lab.sh reset` (hoặc `.\lab.ps1 reset`) sẽ khởi tạo lại dữ liệu mẫu. Không đưa dữ
-liệu thật hoặc tệp riêng tư vào thư mục `storage/`.
+Mặc định ứng dụng dùng SQLite (chế độ WAL, giới hạn bộ nhớ đệm thấp) tại `storage/openshare.sqlite`. Có thể chuyển sang MySQL (`OPENSHARE_DB_DRIVER=mysql`) hoặc SQL Server (`OPENSHARE_DB_DRIVER=sqlsrv`). Chi tiết biến môi trường và lược đồ bảng xem tại [database/README.md](database/README.md) và [database/schema.sql](database/schema.sql).
 
-Dữ liệu mẫu sau khi reset gồm 3 tài khoản, 30 tệp giả và 50 liên kết chia sẻ;
-các tệp giả được tạo trong `storage/files/` để có thể kiểm thử luồng tải
-xuống ngay trên máy thực hành.
+Hướng dẫn triển khai lên VPS Ubuntu tối ưu cho RAM 300–400 MB xem tại [DEPLOY_VPS.md](DEPLOY_VPS.md).
+
+---
 
 ## Chức năng chính
 
-- **Giao diện người dùng mô phỏng Google Drive**: Giao diện trực quan, thanh bên (Sidebar) quản lý, bộ nhớ lưu trữ, chuyển đổi xem Dạng danh sách (List view) và Dạng lưới (Grid view), kéo thả tệp tải lên (Drag & Drop).
-- **Xác thực & Bảo mật**: Đăng nhập, đăng xuất, đăng ký với email Gmail, bảo vệ chống tấn công CSRF bằng CSRF token, chống Session Fixation.
-- **Phân quyền người dùng**: Chủ tệp (owner), Người nhận (recipient), Quản trị viên (admin).
-- **Quản lý thư mục & Tệp**: Tạo thư mục mới, tải tệp vào thư mục chỉ định, lọc tệp theo thư mục hoặc trạng thái (Tất cả / Đang chia sẻ / Riêng tư).
-- **Kiểm soát tệp tải lên**: Giới hạn tối đa 10 MB, kiểm tra phần mở rộng tệp hợp lệ (PDF, TXT, JPG, PNG, ZIP, DOCX), kiểm tra mã MIME thực tế, kiểm tra dung lượng ổ đĩa và hạn mức Quota cá nhân (50 MB).
-- **Chia sẻ tệp linh hoạt**:
-  - Tạo liên kết công khai (bất kỳ ai có link) hoặc chỉ định đích danh tài khoản người nhận.
-  - Tùy chỉnh số ngày hết hạn (1 - 365 ngày).
-  - Tùy chỉnh giới hạn số lượt tải (1 - 1000 lượt).
-  - Mật khẩu bảo vệ tùy chọn (được băm bcrypt an toàn).
-- **Hàng đợi FIFO đồng thời**: Khi liên kết chỉ còn 1 lượt tải cuối cùng, các yêu cầu đồng thời được tự động xếp hàng FIFO theo thời gian yêu cầu; lượt đến trước được cấp phát, lượt sau nhận trạng thái chờ.
-- **Xác nhận lưu tệp chia sẻ**: Người nhận xem trước tệp và chủ động xác nhận lưu vào mục "Được chia sẻ với tôi".
-- **Xem trước tệp đa năng**: Hỗ trợ xem trực tiếp các tệp PDF, Ảnh (JPG, PNG), Văn bản (TXT) ngay trên trình duyệt; hỗ trợ tải trực tiếp các tệp DOCX, ZIP.
-- **Thu hồi & Xóa an toàn**: Thu hồi liên kết lập tức làm mất hiệu lực; ngăn xóa tệp khi còn liên kết hợp lệ (chống mất liên kết của người nhận); xóa tệp đồng thời xóa tệp vật lý ngoài Web root.
-- **Báo cáo & Giám sát**: Biểu đồ phần trăm bộ nhớ, thống kê lượt tải, cảnh báo khi bộ nhớ đạt trên 80%, cảnh báo tệp vật lý bị mất hoặc ổ đĩa sắp đầy, xuất báo cáo ra file CSV (chuẩn UTF-8 BOM hiển thị tiếng Việt trên Excel).
-- **Nhật ký hệ thống**: Lưu lại mọi hoạt động (tải lên, tải xuống, từ chối tải, xếp hàng FIFO, tạo/thu hồi chia sẻ, tạo thư mục...).
+- **Quản lý Drive và thư mục:** Tạo, đổi tên, di chuyển, xóa thư mục; tải lên từng tệp hoặc cả thư mục theo cây thư mục con; kéo thả tệp, lọc theo trạng thái (Tất cả / Đang chia sẻ / Riêng tư), tìm kiếm và phân trang (50 tệp/trang).
+- **Xác thực và bảo mật:** Đăng ký/đăng nhập bằng email `@gmail.com`, băm mật khẩu `password_hash`, quản lý hồ sơ và đổi mật khẩu (`/profile.php`), chống CSRF bằng token, chống Session Fixation, bảo vệ cookie phiên (`HttpOnly`, `SameSite=Lax`) và giới hạn tần suất thử sai (Rate Limiting) lưu trên CSDL theo IP.
+- **Kiểm soát tệp tải lên:** Giới hạn tối đa 10 MB mỗi tệp, hạn mức lưu trữ mặc định 1 GB/tài khoản, kiểm tra phần mở rộng hợp lệ kết hợp kiểm tra mã MIME thực tế, kiểm tra dung lượng ổ đĩa trống và tính mã băm SHA-256 phát hiện trùng lặp.
+  - Định dạng hỗ trợ: Tài liệu (`pdf`, `txt`, `md`, `csv`, `json`, `xml`, `log`, `rtf`, `doc`, `docx`, `xls`, `xlsx`, `ppt`, `pptx`, `odt`, `ods`, `odp`), Hình ảnh (`jpg`, `jpeg`, `png`, `gif`, `webp`, `bmp`), Âm thanh/Video (`mp3`, `wav`, `mp4`, `webm`), Lưu trữ (`zip`, `rar`, `7z`, `tar`, `gz`).
+- **Xem trước và chỉnh sửa trực tiếp trên trình duyệt:**
+  - Xem trực tiếp PDF, hình ảnh, âm thanh và video qua luồng streaming bảo mật.
+  - Chỉnh sửa và lưu trực tiếp nội dung tệp văn bản (`txt`, `md`, `csv`, `json`, `xml`, `log`) và tài liệu `docx` ngay trên trình duyệt (hỗ trợ phím tắt `Ctrl+S`).
+- **Chia sẻ tệp có kiểm soát:**
+  - Chia sẻ công khai qua liên kết hoặc chỉ định đích danh email người nhận.
+  - Thiết lập thời hạn hiệu lực (1–365 ngày), giới hạn số lượt tải (1–1000 lượt) và mật khẩu bảo vệ tùy chọn (có thể cập nhật hoặc gỡ mật khẩu trên liên kết đang hoạt động).
+  - Người nhận xác nhận lưu tệp vào mục "Được chia sẻ với tôi" (`/shared.php`) hoặc từ chối lời mời.
+- **Hàng đợi FIFO khi tranh chấp lượt tải cuối:** Khi liên kết chỉ còn 1 lượt tải cuối cùng, các yêu cầu đồng thời được xử lý trong transaction nguyên tử; yêu cầu đến trước được cấp lượt, các yêu cầu sau vào hàng đợi FIFO và nhận trang chờ tự động kiểm tra lại.
+- **Thùng rác và khôi phục:** Xóa tệp/thư mục sẽ chuyển vào Thùng rác (`/trash.php`) để khôi phục hoặc xóa vĩnh viễn; ngăn xóa tệp khi vẫn còn liên kết chia sẻ hợp lệ.
+- **Báo cáo và nhật ký hoạt động:** Thống kê dung lượng, lượt tải, cảnh báo khi bộ nhớ đạt trên 80% hoặc mất tệp vật lý, xuất báo cáo CSV chuẩn UTF-8 BOM tại `/report.php`, xem nhật ký truy cập tại `/logs.php`.
+
+---
 
 ## Đối chiếu yêu cầu chức năng
 
-| Yêu cầu | Cách sử dụng |
+| Yêu cầu | Đường dẫn / Lệnh sử dụng |
 |---|---|
-| Đăng nhập và quản lý quota | Đăng nhập tại `/login.php`; quota được kiểm tra khi tải lên và xem tại `/report.php` hoặc thanh bên. |
-| Quản lý thư mục và tệp | Tạo thư mục và tải tệp trực tiếp từ nút `Mới` trên Drive, lọc tệp trên `/`. |
-| Kiểm tra tệp trước khi nhận | Giới hạn 10 MB, phần mở rộng cho phép, MIME thực tế, dung lượng đĩa và quota. |
-| Liên kết chia sẻ | Chọn tệp → `Chia sẻ`; đặt hạn dùng, số lượt tải và mật khẩu tùy chọn. |
-| Kiểm tra quyền trước khi tải | Kiểm tra người nhận, chủ sở hữu, hạn dùng, mật khẩu, lượt tải và đường dẫn vật lý. |
-| Thu hồi và lịch sử | Thu hồi tại trang chia sẻ; xem nhật ký tại `/logs.php`. |
-| Dọn tệp hết hạn | `bash lab.sh cleanup` (hoặc `.\lab.ps1 cleanup`) để xem trước; thêm `--delete` để xác nhận xóa. |
-| Tìm kiếm, lọc và báo cáo | Tìm kiếm trên thanh Topbar, lọc `Tất cả / Đang chia sẻ / Riêng tư`, xuất CSV tại `/report.php`. |
+| Đăng ký, đăng nhập và quản lý hồ sơ | `/register.php`, `/login.php`, `/profile.php` |
+| Quản lý thư mục, tệp và thùng rác | `/`, `/trash.php`, `/file-action.php`, `/folder-action.php` |
+| Kiểm tra tệp tải lên và quota | `/upload-file.php`, `/upload-directory.php`, `/report.php` |
+| Xem trước và chỉnh sửa trực tiếp | `/preview.php`, `/save-docx.php`, `/save-text.php` |
+| Chia sẻ, mật khẩu liên kết và lời mời | `/share.php`, `/shared.php`, `/accept-share.php`, `/decline-share.php` |
+| Kiểm tra quyền tải và hàng đợi FIFO | `/download.php`, `/revoke.php` |
+| Dọn tệp hết hạn và thùng rác quá hạn | `bash lab.sh cleanup` hoặc `.\lab.ps1 cleanup` (thêm `--delete` để xóa) |
+| Tìm kiếm, lọc, nhật ký và xuất CSV | `/`, `/logs.php`, `/report.php?format=csv` |
 
-## Phép thử bắt buộc
+---
 
-Chạy kiểm thử:
-- Trên Linux/Bash: `bash lab.sh test` (hoặc `php tests/run.php`)
-- Trên Windows: `.\lab.ps1 test`
+## Kiểm thử tự động
 
-Kiểm tra 7 nhóm: đăng nhập, kiểm tra loại tệp, quota, giới hạn lượt tải đồng thời, hết hạn/thu hồi, chống truy cập chéo chủ sở hữu, và báo cáo.
+Chạy toàn bộ bộ kiểm thử (sử dụng CSDL tạm cô lập, không ảnh hưởng dữ liệu thật):
+
+- Linux / macOS / WSL: `bash lab.sh test` (hoặc `php tests/run.php`)
+- Windows: `.\lab.ps1 test`
+
+Bộ kiểm thử bao gồm 37 phép thử cho các nhóm: xác thực mật khẩu, kiểm tra phần mở rộng và MIME, quota, khóa giao dịch và hàng đợi FIFO nguyên tử, hết hạn/thu hồi liên kết, phân quyền sở hữu, chống Path Traversal, tìm kiếm người nhận, cô lập lời mời chia sẻ, giới hạn tần suất brute-force và đọc/ghi DOCX thuần PHP.

@@ -15,7 +15,8 @@ CREATE TABLE folders (
     name TEXT NOT NULL,
     parent_id TEXT,
     created_at TEXT NOT NULL,
-    UNIQUE (owner_id, name)
+    deleted_at TEXT,
+    UNIQUE (owner_id, parent_id, name)
 );
 
 CREATE TABLE files (
@@ -26,7 +27,9 @@ CREATE TABLE files (
     stored_name TEXT NOT NULL UNIQUE,
     size INTEGER NOT NULL CHECK (size > 0),
     mime TEXT NOT NULL,
+    file_hash TEXT,
     created_at TEXT NOT NULL,
+    deleted_at TEXT,
     download_count INTEGER NOT NULL DEFAULT 0 CHECK (download_count >= 0)
 );
 
@@ -67,7 +70,18 @@ CREATE TABLE share_acceptances (
     PRIMARY KEY (share_id, user_id)
 );
 
+CREATE TABLE rate_limits (
+    action_key TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    window_start INTEGER NOT NULL
+);
+
 CREATE INDEX idx_files_owner ON files(owner_id);
+CREATE INDEX idx_files_owner_folder ON files(owner_id, folder_id);
+CREATE INDEX idx_folders_owner_parent ON folders(owner_id, parent_id);
 CREATE INDEX idx_shares_file ON shares(file_id);
 CREATE INDEX idx_shares_recipient ON shares(recipient_id);
+CREATE INDEX idx_queue_share ON share_queue(share_id, requested_at);
 CREATE INDEX idx_logs_file ON access_logs(file_id);
+CREATE INDEX idx_logs_user ON access_logs(user_id);
+CREATE INDEX idx_logs_at ON access_logs(at);

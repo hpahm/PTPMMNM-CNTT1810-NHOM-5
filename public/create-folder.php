@@ -18,32 +18,41 @@ if (!$user || $csrfToken === '' || !hash_equals((string)($_SESSION['csrf'] ?? ''
 }
 
 $parentId = $parentId !== '' ? $parentId : 'root-' . $user['id'];
-$result = withStore(function (array &$store) use ($user, $name, $parentId): array {
-    $parent = $store['folders'][$parentId] ?? null;
-    if (!$parent || $parent['owner_id'] !== $user['id']) {
-        return ['ok' => false, 'error' => 'Thư mục cha không hợp lệ.'];
-    }
-    if ($name === '' || mb_strlen($name) > 80 || str_contains($name, "\0") || in_array($name, ['.', '..'], true)) {
-        return ['ok' => false, 'error' => 'Tên thư mục không hợp lệ (tối đa 80 ký tự).'];
-    }
-    foreach ($store['folders'] as $folder) {
-        if ($folder['owner_id'] === $user['id']
-            && ($folder['parent_id'] ?? 'root-' . $user['id']) === $parentId
-            && strcasecmp($folder['name'], $name) === 0) {
-            return ['ok' => false, 'error' => 'Thư mục với tên này đã tồn tại.'];
+$db = database();
+$pStmt = $db->prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ? LIMIT 1');
+$pStmt->execute([$parentId, $user['id']]);
+if (!$pStmt->fetchColumn()) {
+    $result = ['ok' => false, 'error' => 'Thư mục cha không hợp lệ.'];
+} elseif ($name === '' || mb_strlen($name) > 80 || str_contains($name, "\0") || in_array($name, ['.', '..'], true)) {
+    $result = ['ok' => false, 'error' => 'Tên thư mục không hợp lệ (tối đa 80 ký tự).'];
+} else {
+    $dupStmt = $db->prepare('SELECT 1 FROM folders WHERE owner_id = ? AND parent_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+    $dupStmt->execute([$user['id'], $parentId, $name]);
+    if ($dupStmt->fetchColumn()) {
+        $result = ['ok' => false, 'error' => 'Thư mục với tên này đã tồn tại.'];
+    } else {
+        $id = bin2hex(random_bytes(8));
+        $createdAt = date(DATE_ATOM);
+        $folder = [
+            'id' => $id,
+            'owner_id' => $user['id'],
+            'name' => $name,
+            'parent_id' => $parentId,
+            'created_at' => $createdAt,
+        ];
+        beginImmediate($db);
+        try {
+            $db->prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at) VALUES (?, ?, ?, ?, ?)')
+               ->execute([$id, $user['id'], $name, $parentId, $createdAt]);
+            logActivity($db, 'folder_created', $user['id']);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $e;
         }
+        $result = ['ok' => true, 'folder' => $folder];
     }
-    $id = bin2hex(random_bytes(8));
-    $store['folders'][$id] = [
-        'id' => $id,
-        'owner_id' => $user['id'],
-        'name' => $name,
-        'parent_id' => $parentId,
-        'created_at' => date(DATE_ATOM),
-    ];
-    logEvent($store, 'folder_created', $user['id']);
-    return ['ok' => true, 'folder' => $store['folders'][$id]];
-});
+}
 
 if (!$result['ok']) {
     http_response_code(422);

@@ -5,7 +5,7 @@ require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 
 $user = requireLogin();
-$data = readStore();
+$db = database();
 
 $q = strtolower(get('q'));
 $status = get('status');
@@ -14,7 +14,9 @@ $currentFolderId = $folderId !== '' ? $folderId : 'root-' . $user['id'];
 $folder = null;
 
 if ($folderId !== '') {
-    $folder = $data['folders'][$folderId] ?? null;
+    $fStmt = $db->prepare('SELECT * FROM folders WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $fStmt->execute([$folderId]);
+    $folder = $fStmt->fetch(PDO::FETCH_ASSOC) ?: null;
     if (!$folder || ($user['role'] !== 'admin' && $folder['owner_id'] !== $user['id'])) {
         http_response_code(404);
         exit('Không tìm thấy thư mục.');
@@ -23,42 +25,67 @@ if ($folderId !== '') {
 
 $breadcrumbFolders = [];
 $breadcrumbCursor = $folder;
+$lookupStmt = $db->prepare('SELECT * FROM folders WHERE id = ? AND deleted_at IS NULL LIMIT 1');
 while ($breadcrumbCursor && ($breadcrumbCursor['id'] ?? '') !== 'root-' . $user['id']) {
     array_unshift($breadcrumbFolders, $breadcrumbCursor);
     $parentId = $breadcrumbCursor['parent_id'] ?? '';
-    $breadcrumbCursor = $parentId !== '' ? ($data['folders'][$parentId] ?? null) : null;
+    if ($parentId !== '') {
+        $lookupStmt->execute([$parentId]);
+        $breadcrumbCursor = $lookupStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } else {
+        $breadcrumbCursor = null;
+    }
 }
 
-$files = array_filter($data['files'], function (array $file) use ($user, $q, $status, $currentFolderId, $data): bool {
-    if ($user['role'] !== 'admin' && $file['owner_id'] !== $user['id']) {
-        return false;
-    }
-    if ($q !== '' && !str_contains(strtolower($file['original_name']), $q)) {
-        return false;
-    }
-    if (($file['folder_id'] ?? 'root-' . $file['owner_id']) !== $currentFolderId) {
-        return false;
-    }
-    $shares = array_filter($data['shares'], fn($s) => $s['file_id'] === $file['id'] && $s['revoked_at'] === null);
-    if ($status === 'shared' && empty($shares)) {
-        return false;
-    }
-    if ($status === 'private' && !empty($shares)) {
-        return false;
-    }
-    return true;
-});
+$nowIso = date(DATE_ATOM);
+$where = ['f.folder_id = ?', 'f.deleted_at IS NULL'];
+$params = [$currentFolderId];
+if ($user['role'] !== 'admin') {
+    $where[] = 'f.owner_id = ?';
+    $params[] = $user['id'];
+}
+if ($q !== '') {
+    $where[] = 'LOWER(f.original_name) LIKE ?';
+    $params[] = '%' . $q . '%';
+}
+if ($status === 'shared') {
+    $where[] = 'EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id AND s.revoked_at IS NULL)';
+} elseif ($status === 'private') {
+    $where[] = 'NOT EXISTS (SELECT 1 FROM shares s WHERE s.file_id = f.id AND s.revoked_at IS NULL)';
+}
 
-// Sắp xếp tệp mới nhất lên đầu
-usort($files, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
+$page = max(1, (int)(get('page') ?: 1));
+$perPage = 50;
+$offset = ($page - 1) * $perPage;
+
+$countStmt = $db->prepare('SELECT COUNT(*) FROM files f WHERE ' . implode(' AND ', $where));
+$countStmt->execute($params);
+$totalFiles = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalFiles / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
+}
+
+$filesSql = 'SELECT f.*, u.name AS owner_name,
+    (SELECT COUNT(*) FROM shares s WHERE s.file_id = f.id AND s.revoked_at IS NULL AND s.expires_at > ? AND s.downloads < s.max_downloads) AS active_share_count
+    FROM files f
+    LEFT JOIN users u ON u.id = f.owner_id
+    WHERE ' . implode(' AND ', $where) . '
+    ORDER BY f.created_at DESC
+    LIMIT ' . $perPage . ' OFFSET ' . $offset;
+$filesStmt = $db->prepare($filesSql);
+$filesStmt->execute(array_merge([$nowIso], $params));
+$files = $filesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $parentFolderId = $folderId !== '' ? $folderId : 'root-' . $user['id'];
-$folders = array_values(array_filter($data['folders'], function (array $candidate) use ($user, $parentFolderId): bool {
-    return $candidate['owner_id'] === $user['id']
-        && strcasecmp((string)($candidate['name'] ?? ''), 'Tệp của tôi') !== 0
-        && ($candidate['parent_id'] ?? 'root-' . $user['id']) === $parentFolderId;
-}));
-usort($folders, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+$foldersStmt = $db->prepare("SELECT * FROM folders WHERE owner_id = ? AND parent_id = ? AND deleted_at IS NULL AND LOWER(name) <> LOWER('Tệp của tôi') ORDER BY LOWER(name) ASC");
+$foldersStmt->execute([$user['id'], $parentFolderId]);
+$folders = $foldersStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$allUserFoldersStmt = $db->prepare("SELECT id, name, parent_id FROM folders WHERE owner_id = ? AND deleted_at IS NULL ORDER BY LOWER(name) ASC");
+$allUserFoldersStmt->execute([$user['id']]);
+$allUserFolders = $allUserFoldersStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = $folder ? $folder['name'] : ($q !== '' ? 'Kết quả: "' . $q . '"' : 'Drive của tôi');
 layoutStart($pageTitle);
@@ -66,7 +93,7 @@ layoutStart($pageTitle);
 
 <div class="drive-container">
     <?php 
-    $pendingInvites = countPendingInvitations($data, $user['id']);
+    $pendingInvites = countPendingInvitationsForUser($user['id']);
     if ($pendingInvites > 0): 
     ?>
         <div class="invitation-banner">
@@ -187,8 +214,7 @@ layoutStart($pageTitle);
                 <tbody>
                     <?php foreach ($files as $file): 
                         $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-                        $shares = array_filter($data['shares'], fn($s) => $s['file_id'] === $file['id'] && $s['revoked_at'] === null);
-                        $activeShares = array_filter($shares, fn($s) => validShare($s, time()));
+                        $activeShareCount = (int)($file['active_share_count'] ?? 0);
                         $isOwnerOrAdmin = ($file['owner_id'] === $user['id'] || $user['role'] === 'admin');
                     ?>
                     <tr class="file-row-item" draggable="<?= $isOwnerOrAdmin ? 'true' : 'false' ?>" data-file-id="<?= h($file['id']) ?>">
@@ -200,15 +226,15 @@ layoutStart($pageTitle);
                         </td>
                         <td class="td-owner">
                             <span class="owner-pill">
-                                <?= h($data['users'][$file['owner_id']]['name'] ?? 'Chủ tệp') ?>
+                                <?= h($file['owner_name'] ?? 'Chủ tệp') ?>
                             </span>
                         </td>
                         <td class="td-date"><?= h(date('d/m/Y H:i', strtotime($file['created_at']))) ?></td>
                         <td class="td-size"><?= formatBytes((int)$file['size']) ?></td>
                         <td class="td-status">
-                            <?php if (!empty($activeShares)): ?>
-                                <span class="badge-status status-shared" title="<?= count($activeShares) ?> liên kết hợp lệ">
-                                    🔗 Đang chia sẻ (<?= count($activeShares) ?>)
+                            <?php if ($activeShareCount > 0): ?>
+                                <span class="badge-status status-shared" title="<?= $activeShareCount ?> liên kết hợp lệ">
+                                    🔗 Đang chia sẻ (<?= $activeShareCount ?>)
                                 </span>
                             <?php else: ?>
                                 <span class="badge-status status-private">🔒 Riêng tư</span>
@@ -218,10 +244,12 @@ layoutStart($pageTitle);
                             <div class="row-btn-group">
                                 <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước">👁</a>
                                 <?php if ($isOwnerOrAdmin): ?>
+                                    <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')">✎</button>
+                                    <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')">📂</button>
                                     <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Quản lý chia sẻ">🔗</a>
                                     <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống">⇩</a>
                                     <a href="/logs.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Lịch sử tải">⏱</a>
-                                    <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Xóa tệp">🗑</a>
+                                    <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác">🗑</a>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -235,8 +263,7 @@ layoutStart($pageTitle);
         <div id="drive-grid-container" class="drive-grid" style="display:none;">
             <?php foreach ($files as $file): 
                 $ext = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
-                $shares = array_filter($data['shares'], fn($s) => $s['file_id'] === $file['id'] && $s['revoked_at'] === null);
-                $activeShares = array_filter($shares, fn($s) => validShare($s, time()));
+                $activeShareCount = (int)($file['active_share_count'] ?? 0);
                 $isOwnerOrAdmin = ($file['owner_id'] === $user['id'] || $user['role'] === 'admin');
             ?>
             <div class="drive-card" draggable="<?= $isOwnerOrAdmin ? 'true' : 'false' ?>" data-file-id="<?= h($file['id']) ?>">
@@ -255,8 +282,8 @@ layoutStart($pageTitle);
                 </div>
                 <div class="card-footer">
                     <div class="card-status-badge">
-                        <?php if (!empty($activeShares)): ?>
-                            <span class="badge-status status-shared">Đang chia sẻ (<?= count($activeShares) ?>)</span>
+                        <?php if ($activeShareCount > 0): ?>
+                            <span class="badge-status status-shared">Đang chia sẻ (<?= $activeShareCount ?>)</span>
                         <?php else: ?>
                             <span class="badge-status status-private">Riêng tư</span>
                         <?php endif; ?>
@@ -264,9 +291,11 @@ layoutStart($pageTitle);
                     <div class="card-actions">
                         <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước">👁</a>
                         <?php if ($isOwnerOrAdmin): ?>
+                            <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')">✎</button>
+                            <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')">📂</button>
                             <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Chia sẻ">🔗</a>
                             <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống">⇩</a>
-                            <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Xóa">🗑</a>
+                            <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác">🗑</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -274,7 +303,64 @@ layoutStart($pageTitle);
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
+
+    <?php if ($totalPages > 1): ?>
+        <div class="drive-pagination" style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:18px;">
+            <?php if ($page > 1): ?>
+                <a class="btn btn-sm btn-outline" href="/?<?= http_build_query(array_filter(['folder' => $folderId, 'q' => $q, 'status' => $status, 'page' => $page - 1])) ?>">‹ Trang trước</a>
+            <?php endif; ?>
+            <span class="text-muted">Trang <?= $page ?> / <?= $totalPages ?> (<?= $totalFiles ?> tệp)</span>
+            <?php if ($page < $totalPages): ?>
+                <a class="btn btn-sm btn-outline" href="/?<?= http_build_query(array_filter(['folder' => $folderId, 'q' => $q, 'status' => $status, 'page' => $page + 1])) ?>">Trang sau ›</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 </div>
+
+<script>
+const __driveFolders = <?= json_encode(array_map(fn($f) => ['id' => $f['id'], 'name' => $f['name']], $allUserFolders), JSON_UNESCAPED_UNICODE) ?>;
+const __driveCsrf = <?= json_encode(csrf()) ?>;
+
+async function renameFileAction(fileId, currentName) {
+    const newName = window.prompt('Nhập tên tệp mới:', currentName);
+    if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+    const res = await fetch('/file-action.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({action: 'rename', file: fileId, name: newName.trim(), csrf: __driveCsrf})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+        alert(data.error || 'Không thể đổi tên tệp.');
+        return;
+    }
+    window.location.reload();
+}
+
+async function moveFileAction(fileId) {
+    if (!__driveFolders.length) return;
+    const listText = __driveFolders.map((f, idx) => `${idx + 1}. ${f.name}`).join('\n');
+    const choice = window.prompt('Chọn số thứ tự thư mục đích:\n' + listText);
+    if (!choice) return;
+    const index = parseInt(choice, 10) - 1;
+    const target = __driveFolders[index];
+    if (!target) {
+        alert('Lựa chọn thư mục không hợp lệ.');
+        return;
+    }
+    const res = await fetch('/file-action.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({action: 'move', file: fileId, folder: target.id, csrf: __driveCsrf})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+        alert(data.error || 'Không thể di chuyển tệp.');
+        return;
+    }
+    window.location.reload();
+}
+</script>
 
 <div class="folder-modal" id="folder-modal" aria-hidden="true">
     <div class="folder-modal-backdrop" data-close-folder-modal></div>
