@@ -58,7 +58,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } else {
             flash('Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.');
         }
-        redirect('/login.php');
+        redirect('/login');
     }
 }
 
@@ -151,7 +151,7 @@ layoutStart('Đăng ký');
 
     <div class="auth-card-footer">
         <span>Đã có tài khoản?</span>
-        <a href="/login.php">Đăng nhập ngay</a>
+        <a href="/login">Đăng nhập ngay</a>
     </div>
 </div>
 

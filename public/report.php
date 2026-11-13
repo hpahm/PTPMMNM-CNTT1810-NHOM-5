@@ -62,7 +62,7 @@ layoutStart('Báo cáo lưu trữ & Quota');
             <p class="text-muted">Tổng quan dung lượng sử dụng, hạn mức quota và thống kê lượt tải tệp</p>
         </div>
         <div class="header-actions">
-            <a href="/report.php?format=csv" class="btn btn-outline btn-sm">
+            <a href="/report?format=csv" class="btn btn-outline btn-sm">
                 <?= uiIcon('chart', 16) ?> Xuất báo cáo CSV
             </a>
             <a href="/" class="btn btn-primary btn-sm">‹ Quay lại Drive</a>
@@ -147,7 +147,7 @@ layoutStart('Báo cáo lưu trữ & Quota');
                     ?>
                     <tr>
                         <td>
-                            <a href="/preview.php?file=<?= rawurlencode($f['id']) ?>" class="file-title-link">
+                            <a href="/preview?file=<?= rawurlencode($f['id']) ?>" class="file-title-link">
                                 <span class="file-badge badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></span>
                                 <span class="file-name-text"><?= h($f['original_name']) ?></span>
                             </a>
@@ -157,8 +157,8 @@ layoutStart('Báo cáo lưu trữ & Quota');
                         <td><?= h(date('d/m/Y H:i', strtotime($f['created_at']))) ?></td>
                         <td>
                             <div class="row-btn-group">
-                                <a href="/preview.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
-                                <a href="/logs.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Nhật ký"><?= uiIcon('clock', 14) ?></a>
+                                <a href="/preview?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                                <a href="/logs?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Nhật ký"><?= uiIcon('clock', 14) ?></a>
                             </div>
                         </td>
                     </tr>

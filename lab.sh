@@ -17,7 +17,7 @@ case "${1:-help}" in
   run)
     bash "$0" check || exit 2
     mkdir -p storage/files
-    php -d session.save_path="$root/storage/sessions" -S 127.0.0.1:8127 -t public
+    php -d session.save_path="$root/storage/sessions" -S 127.0.0.1:8127 router.php
     ;;
   test)
     bash "$0" check || exit 2

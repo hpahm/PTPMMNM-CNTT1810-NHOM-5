@@ -33,7 +33,7 @@ try {
 
 flash('Đã thu hồi liên kết chia sẻ thành công!');
 if ($targetFileId !== '') {
-    redirect('/share.php?file=' . rawurlencode($targetFileId));
+    redirect('/share?file=' . rawurlencode($targetFileId));
 } else {
     redirect('/');
 }

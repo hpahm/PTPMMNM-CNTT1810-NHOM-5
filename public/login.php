@@ -90,7 +90,7 @@ layoutStart('Đăng nhập');
 
     <div class="auth-card-footer">
         <span>Chưa có tài khoản?</span>
-        <a href="/register.php">Đăng ký tài khoản mới</a>
+        <a href="/register">Đăng ký tài khoản mới</a>
     </div>
 </div>
 

@@ -104,7 +104,7 @@ layoutStart($pageTitle);
                     <span style="display:block; color: var(--color-text-sub); font-size: 13px;">Người dùng khác đã chia sẻ tệp cho bạn. Vui lòng kiểm tra và xác nhận lưu vào danh sách của bạn.</span>
                 </div>
             </div>
-            <a href="/shared.php" class="btn btn-sm btn-primary">Xem lời mời ngay ›</a>
+            <a href="/shared" class="btn btn-sm btn-primary">Xem lời mời ngay ›</a>
         </div>
     <?php endif; ?>
 
@@ -172,7 +172,7 @@ layoutStart($pageTitle);
                         <span class="folder-menu-anchor">
                             <button type="button" class="folder-more-button" data-folder-menu-button="<?= h($driveFolder['id']) ?>" aria-label="Tùy chọn thư mục">⋮</button>
                             <div class="folder-more-menu" data-folder-menu="<?= h($driveFolder['id']) ?>" hidden>
-                                <a href="/download-folder.php?folder=<?= rawurlencode($driveFolder['id']) ?>"><?= uiIcon('download', 14) ?> <span>Tải xuống</span></a>
+                                <a href="/download-folder?folder=<?= rawurlencode($driveFolder['id']) ?>"><?= uiIcon('download', 14) ?> <span>Tải xuống</span></a>
                                 <button type="button" data-folder-action="rename" data-folder-id="<?= h($driveFolder['id']) ?>"><?= uiIcon('edit', 14) ?> <span>Đổi tên</span></button>
                                 <button type="button" class="folder-sort-trigger" data-folder-action="sort">⇅ <span>Sắp xếp</span><b>›</b></button>
                                 <div class="folder-sort-menu" hidden>
@@ -219,7 +219,7 @@ layoutStart($pageTitle);
                     ?>
                     <tr class="file-row-item" draggable="<?= $isOwnerOrAdmin ? 'true' : 'false' ?>" data-file-id="<?= h($file['id']) ?>">
                         <td class="td-name">
-                            <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="file-title-link">
+                            <a href="/preview?file=<?= rawurlencode($file['id']) ?>" class="file-title-link">
                                 <span class="file-badge badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></span>
                                 <span class="file-name-text" title="<?= h($file['original_name']) ?>"><?= h($file['original_name']) ?></span>
                             </a>
@@ -242,14 +242,14 @@ layoutStart($pageTitle);
                         </td>
                         <td class="td-actions">
                             <div class="row-btn-group">
-                                <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                                <a href="/preview?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
                                 <?php if ($isOwnerOrAdmin): ?>
                                     <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')"><?= uiIcon('edit', 14) ?></button>
                                     <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')"><?= uiIcon('folder', 14) ?></button>
-                                    <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Quản lý chia sẻ"><?= uiIcon('share', 14) ?></a>
-                                    <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
-                                    <a href="/logs.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Lịch sử tải"><?= uiIcon('clock', 14) ?></a>
-                                    <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
+                                    <a href="/share?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Quản lý chia sẻ"><?= uiIcon('share', 14) ?></a>
+                                    <a href="/download?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
+                                    <a href="/logs?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Lịch sử tải"><?= uiIcon('clock', 14) ?></a>
+                                    <a href="/delete?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -267,12 +267,12 @@ layoutStart($pageTitle);
                 $isOwnerOrAdmin = ($file['owner_id'] === $user['id'] || $user['role'] === 'admin');
             ?>
             <div class="drive-card" draggable="<?= $isOwnerOrAdmin ? 'true' : 'false' ?>" data-file-id="<?= h($file['id']) ?>">
-                <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="card-preview-area">
+                <a href="/preview?file=<?= rawurlencode($file['id']) ?>" class="card-preview-area">
                     <div class="card-file-type badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></div>
                     <div class="card-preview-symbol"><?= uiIcon('file', 36) ?></div>
                 </a>
                 <div class="card-body">
-                    <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="card-title" title="<?= h($file['original_name']) ?>">
+                    <a href="/preview?file=<?= rawurlencode($file['id']) ?>" class="card-title" title="<?= h($file['original_name']) ?>">
                         <?= h($file['original_name']) ?>
                     </a>
                     <div class="card-meta">
@@ -289,13 +289,13 @@ layoutStart($pageTitle);
                         <?php endif; ?>
                     </div>
                     <div class="card-actions">
-                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                        <a href="/preview?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
                         <?php if ($isOwnerOrAdmin): ?>
                             <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')"><?= uiIcon('edit', 14) ?></button>
                             <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')"><?= uiIcon('folder', 14) ?></button>
-                            <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Chia sẻ"><?= uiIcon('share', 14) ?></a>
-                            <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
-                            <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
+                            <a href="/share?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Chia sẻ"><?= uiIcon('share', 14) ?></a>
+                            <a href="/download?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
+                            <a href="/delete?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -324,7 +324,7 @@ const __driveCsrf = <?= json_encode(csrf()) ?>;
 async function renameFileAction(fileId, currentName) {
     const newName = window.prompt('Nhập tên tệp mới:', currentName);
     if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
-    const res = await fetch('/file-action.php', {
+    const res = await fetch('/file-action', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
         body: JSON.stringify({action: 'rename', file: fileId, name: newName.trim(), csrf: __driveCsrf})
@@ -348,7 +348,7 @@ async function moveFileAction(fileId) {
         alert('Lựa chọn thư mục không hợp lệ.');
         return;
     }
-    const res = await fetch('/file-action.php', {
+    const res = await fetch('/file-action', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
         body: JSON.stringify({action: 'move', file: fileId, folder: target.id, csrf: __driveCsrf})
@@ -495,7 +495,7 @@ async function moveFileAction(fileId) {
                 : '';
             if (type === 'rename' && name === null) return;
             try {
-                const response = await fetch('/folder-action.php', {
+                const response = await fetch('/folder-action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                     body: JSON.stringify({folder: folderId, action: type, name, csrf: csrfToken})
@@ -599,7 +599,7 @@ async function moveFileAction(fileId) {
         submit.disabled = true;
         folderError.textContent = '';
         try {
-            const response = await fetch('/create-folder.php', {
+            const response = await fetch('/create-folder', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                 body: JSON.stringify({name: folderName.value, parent: currentFolder, csrf: csrfToken})
@@ -669,7 +669,7 @@ async function moveFileAction(fileId) {
             formData.append('folder_id', folderId);
             formData.append('file', file, file.name);
             try {
-                const result = await uploadWithProgress('/upload-file.php', formData, `${index + 1}/${files.length} tệp: ${file.name}`);
+                const result = await uploadWithProgress('/upload-file', formData, `${index + 1}/${files.length} tệp: ${file.name}`);
                 links.push({label: file.name, href: `/?folder=${encodeURIComponent(result.folder_id)}`});
             } catch (err) {
                 uploadStatusTitle.textContent = 'Tải lên thất bại';
@@ -691,7 +691,7 @@ async function moveFileAction(fileId) {
             formData.append('paths[]', record.path);
         });
         try {
-            const result = await uploadWithProgress('/upload-directory.php', formData, `Đang tải ${records.length} tệp...`);
+            const result = await uploadWithProgress('/upload-directory', formData, `Đang tải ${records.length} tệp...`);
             showUploadComplete([{label: 'Mở thư mục vừa tải lên', href: `/?folder=${encodeURIComponent(result.folder_id)}`}]);
         } catch (error) {
             uploadStatusTitle.textContent = 'Tải lên thất bại';
@@ -873,7 +873,7 @@ async function moveFileAction(fileId) {
             const draggedFolderId = event.dataTransfer.getData('application/x-openshare-folder');
             if (draggedFolderId) {
                 try {
-                    const response = await fetch('/folder-action.php', {
+                    const response = await fetch('/folder-action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                         body: JSON.stringify({folder: draggedFolderId, action: 'move', parent: target.dataset.dropFolder, csrf: csrfToken})
@@ -889,7 +889,7 @@ async function moveFileAction(fileId) {
             if (fileId) {
                 if (uploadStatusPanel) uploadStatusPanel.hidden = true;
                 try {
-                    const response = await fetch('/move-file.php', {
+                    const response = await fetch('/move-file', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                         body: JSON.stringify({file: fileId, folder: target.dataset.dropFolder, csrf: csrfToken})

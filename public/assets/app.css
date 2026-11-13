@@ -2111,16 +2111,17 @@ button, input, select, textarea {
     border: 1px solid #dfe3e8;
     box-shadow: 0 2px 8px rgba(60, 64, 67, 0.12);
     color: #202124;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Times New Roman", Arial, sans-serif;
     font-size: 15px;
     line-height: 1.6;
     outline: none;
-    white-space: pre-wrap;
+    white-space: normal;
 }
 
 .docx-editor p {
-    min-height: 1.6em;
-    margin: 0 0 8px;
+    min-height: 1.4em;
+    margin: 0 0 6px;
+    word-break: break-word;
 }
 
 .docx-editor strong {
@@ -2165,11 +2166,38 @@ button, input, select, textarea {
     font-size: 12px;
 }
 
-.docx-embedded-image {
+.docx-img-wrap {
     display: block;
+    margin: 10px 0;
+    text-align: center;
+}
+
+.docx-embedded-image {
+    display: inline-block;
     max-width: 100%;
     height: auto;
-    margin: 8px 0;
+    border-radius: 4px;
+}
+
+/* Smooth Tab & Page Transition */
+.drive-container,
+.drive-container-narrow,
+.preview-workspace,
+.auth-card {
+    transition: opacity 0.15s ease-in-out;
+}
+
+.drive-table-wrap,
+.drive-grid {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.filter-pill {
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-nav a {
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .docx-header,

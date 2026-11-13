@@ -174,12 +174,44 @@ saveDocxContent($docxTestPath, 'Đã cập nhật nội dung');
 $paragraphs = readDocxParagraphs($docxTestPath);
 check(($paragraphs[0] ?? '') === 'Đã cập nhật nội dung', 'Lưu DOCX thuần PHP không cần 7z');
 
+// Phép thử: Chỉnh sửa DOCX tại chỗ bảo toàn cấu trúc bảng và ảnh nhúng
+$docWithTableXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    . '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    . '<w:body>'
+    . '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Tiêu đề biểu mẫu</w:t></w:r></w:p>'
+    . '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Ô bảng 1</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+    . '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>'
+    . '</w:body></w:document>';
+zipWriteArchive($docxTestPath, [
+    ['name' => '[Content_Types].xml', 'data' => '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>'],
+    ['name' => 'word/document.xml', 'data' => $docWithTableXml],
+    ['name' => 'word/media/logo.png', 'data' => 'FAKE_IMAGE_BYTES'],
+]);
+saveDocxContent($docxTestPath, [
+    'paragraphs' => [
+        ['id' => 0, 'text' => 'Tiêu đề đã sửa'],
+        ['id' => 1, 'text' => 'Nội dung ô bảng đã sửa']
+    ]
+]);
+$updatedEntries = zipReadEntries($docxTestPath);
+$updatedDocXml = $updatedEntries['word/document.xml'] ?? '';
+$hasTable = str_contains($updatedDocXml, '<w:tbl>') && str_contains($updatedDocXml, '</w:tbl>');
+$hasImageEntry = isset($updatedEntries['word/media/logo.png']);
+$newParas = readDocxParagraphs($docxTestPath);
+check($hasTable && $hasImageEntry && ($newParas[0] ?? '') === 'Tiêu đề đã sửa' && ($newParas[1] ?? '') === 'Nội dung ô bảng đã sửa', 'Chỉnh sửa DOCX tại chỗ bảo toàn cấu trúc bảng và ảnh nhúng');
+
 // Phép thử: Hàng đợi SQL nguyên tử (requestDownloadSlotSql)
 $db = database();
 $db->prepare("UPDATE shares SET downloads = 0, max_downloads = 1 WHERE id = 'test-share-01'")->execute();
 $r1 = requestDownloadSlotSql($db, 'test-share-01', 'recipient', time());
 $r2 = requestDownloadSlotSql($db, 'test-share-01', 'owner', time());
 check($r1['status'] === 'granted' && $r2['status'] === 'queued' && $r2['position'] === 1, 'Cấp lượt và xếp hàng FIFO qua SQL nguyên tử');
+
+// Phép thử: Bộ điều hướng Clean URL (router.php)
+$sessionPath = APP_ROOT . '/storage/sessions';
+$cmd = 'php -d "session.save_path=' . escapeshellarg($sessionPath) . '" -r "$_SERVER[\'REQUEST_URI\']=\'/login\'; require \'router.php\';"';
+$routeOut = (string)shell_exec($cmd);
+check(str_contains($routeOut, 'Đăng nhập OpenShare'), 'Bộ điều hướng Clean URL (/login)');
 
 echo "TESTS=$passed FAILED=$failed\n";
 exit($failed === 0 ? 0 : 1);

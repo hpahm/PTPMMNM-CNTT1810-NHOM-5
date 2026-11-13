@@ -46,7 +46,7 @@ switch ($Action.ToLower()) {
             New-Item -ItemType Directory -Path "$PSScriptRoot\storage\sessions" -Force | Out-Null
         }
         Write-Host "Dang khoi chay OpenShare Web tai: http://127.0.0.1:8127" -ForegroundColor Cyan
-        php -d "session.save_path=$PSScriptRoot\storage\sessions" -S 127.0.0.1:8127 -t public
+        php -d "session.save_path=$PSScriptRoot\storage\sessions" -S 127.0.0.1:8127 router.php
     }
     "test" {
         $ok = Check-Environment

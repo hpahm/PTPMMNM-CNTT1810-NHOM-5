@@ -37,4 +37,4 @@ if (!$declined) {
 }
 
 flash('Bạn đã từ chối lời mời chia sẻ.');
-redirect('/shared.php');
+redirect('/shared');

@@ -33,7 +33,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if ($path !== null) @unlink($path);
         }
         flash('Đã dọn sạch thùng rác.');
-        redirect('/trash.php');
+        redirect('/trash');
     } elseif ($targetType === 'file' && $targetId !== '') {
         $fStmt = $db->prepare('SELECT * FROM files WHERE id = ? AND owner_id = ? AND deleted_at IS NOT NULL LIMIT 1');
         $fStmt->execute([$targetId, $user['id']]);
@@ -62,7 +62,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 flash('Đã xóa vĩnh viễn tệp "' . $file['original_name'] . '".');
             }
         }
-        redirect('/trash.php');
+        redirect('/trash');
     } elseif ($targetType === 'folder' && $targetId !== '') {
         $dStmt = $db->prepare('SELECT * FROM folders WHERE id = ? AND owner_id = ? AND deleted_at IS NOT NULL LIMIT 1');
         $dStmt->execute([$targetId, $user['id']]);
@@ -127,7 +127,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 flash('Đã xóa vĩnh viễn thư mục "' . $folder['name'] . '".');
             }
         }
-        redirect('/trash.php');
+        redirect('/trash');
     }
 }
 

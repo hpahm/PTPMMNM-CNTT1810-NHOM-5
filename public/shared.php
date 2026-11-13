@@ -105,7 +105,7 @@ layoutStart('Được chia sẻ với tôi');
                     </div>
 
                     <div class="invitation-actions">
-                        <form method="post" action="/accept-share.php" style="display:inline; margin: 0;">
+                        <form method="post" action="/accept-share" style="display:inline; margin: 0;">
                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                             <input type="hidden" name="share" value="<?= h($share['id']) ?>">
                             <button type="submit" class="btn btn-sm btn-success" title="Chấp nhận và lưu vào Drive của tôi">
@@ -113,7 +113,7 @@ layoutStart('Được chia sẻ với tôi');
                             </button>
                         </form>
 
-                        <form method="post" action="/decline-share.php" onsubmit="return confirm('Bạn có chắc muốn từ chối lời mời chia sẻ này không?');" style="display:inline; margin: 0;">
+                        <form method="post" action="/decline-share" onsubmit="return confirm('Bạn có chắc muốn từ chối lời mời chia sẻ này không?');" style="display:inline; margin: 0;">
                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                             <input type="hidden" name="share" value="<?= h($share['id']) ?>">
                             <button type="submit" class="btn btn-sm btn-outline" title="Từ chối lời mời">
@@ -121,7 +121,7 @@ layoutStart('Được chia sẻ với tôi');
                             </button>
                         </form>
 
-                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn btn-sm btn-outline" style="margin-left: auto;" title="Xem trước nội dung tệp">
+                        <a href="/preview?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn btn-sm btn-outline" style="margin-left: auto;" title="Xem trước nội dung tệp">
                             <?= uiIcon('eye', 14) ?> Xem
                         </a>
                     </div>
@@ -167,7 +167,7 @@ layoutStart('Được chia sẻ với tôi');
                         ?>
                         <tr>
                             <td>
-                                <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="file-title-link">
+                                <a href="/preview?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="file-title-link">
                                     <span class="file-badge badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></span>
                                     <span class="file-name-text"><?= h($file['original_name']) ?></span>
                                 </a>
@@ -182,8 +182,8 @@ layoutStart('Được chia sẻ với tôi');
                             <td><?= h(date('d/m/Y H:i', strtotime($share['expires_at']))) ?></td>
                             <td>
                                 <div class="row-btn-group">
-                                    <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
-                                    <a href="/download.php?share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
+                                    <a href="/preview?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                                    <a href="/download?share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
                                 </div>
                             </td>
                         </tr>

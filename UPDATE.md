@@ -62,3 +62,22 @@ Tài liệu này tổng hợp các thay đổi về kiến trúc, hiệu năng, 
 
 ---
 
+## V. Tinh chỉnh DOCX, Clean URLs và Trải nghiệm chuyển tab
+
+### 1. Chỉnh sửa DOCX tại chỗ bảo toàn nguyên vẹn biểu mẫu, bảng biểu và ảnh nhúng
+- **Vấn đề trước đây:** Khi chỉnh sửa tệp DOCX trên giao diện web, hệ thống lấy toàn bộ văn bản thuần (`innerText`) và tái tạo tệp XML mới, dẫn đến mất toàn bộ định dạng bảng (`w:tbl`), mất liên kết ảnh trong `word/media/`, vỡ layout biểu mẫu và làm hỏng tệp khi tải về mở bằng Microsoft Word.
+- **Giải pháp:**
+  - `readDocxHtml()` gắn mã định danh đoạn (`data-pid`) cho từng đoạn văn (`w:p`) trong nội dung chính và trong các ô bảng (`w:tc`), đồng thời bảo vệ các phần tử nhúng bằng `contenteditable="false"`.
+  - `saveDocxContent()` nạp tệp `word/document.xml` gốc và cập nhật văn bản trực tiếp tại các đoạn được chỉnh sửa (in-place XML update), bảo toàn tuyệt đối thuộc tính đoạn (`w:pPr`), cấu trúc bảng (`w:tbl`, `w:tcPr`), đối tượng đồ họa/ảnh nhúng (`w:drawing`, `w:pict`), phần đầu/chân trang và cài đặt trang (`w:sectPr`).
+  - Tệp tải về giữ nguyên vẹn 100% định dạng, biểu mẫu và hình ảnh gốc khi mở trên Microsoft Word, LibreOffice hoặc Google Docs.
+
+### 2. Định dạng Clean URLs (Không hiển thị phần mở rộng `.php`)
+- Chuẩn hóa toàn bộ hệ thống đường dẫn nội bộ không còn đuôi `.php` (ví dụ `/shared`, `/logs`, `/report`, `/trash`, `/profile`, `/login`, `/register`, `/preview`, `/share`, `/download`).
+- Bổ sung `router.php` phục vụ việc chạy thử nghiệm mượt mà trên môi trường PHP Built-in Server (`lab.ps1 run` và `lab.sh run`).
+- Cập nhật cấu hình Nginx trong hướng dẫn triển khai (`DEPLOY_VPS.md`) với chỉ thị `try_files $uri $uri/ $uri.php$is_args$args /index.php$is_args$args;`, giúp máy chủ production tự động xử lý Clean URLs mà vẫn hỗ trợ các URL cũ có đuôi `.php` để tương thích ngược.
+
+### 3. Tối ưu hóa chuyển tab và điều hướng trang mượt mà (Instant Navigation)
+- Triển khai cơ chế điều hướng tức thì không giật/chớp trắng màn hình khi người dùng chuyển đổi giữa các mục ("Tệp của tôi", "Được chia sẻ với tôi", "Nhật ký", "Bộ nhớ lưu trữ", "Thùng rác") hoặc thao tác bộ lọc danh sách tệp.
+- Bổ sung hiệu ứng chuyển động CSS mượt mà cho bảng tệp và lưới hiển thị tệp, nâng cao trải nghiệm ứng dụng web hiện đại.
+- Loại bỏ toàn bộ Emoji, thay thế bằng bộ SVG Vector phẳng và tích hợp Logo OpenShare độc quyền để tránh vi phạm bản quyền.
+

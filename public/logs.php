@@ -96,7 +96,7 @@ layoutStart('Nhật ký hoạt động');
         </div>
         <div class="header-actions">
             <?php if ($fileId !== ''): ?>
-                <a href="/logs.php" class="btn btn-outline btn-sm">Xem tất cả hoạt động</a>
+                <a href="/logs" class="btn btn-outline btn-sm">Xem tất cả hoạt động</a>
             <?php endif; ?>
             <a href="/" class="btn btn-primary btn-sm">‹ Quay lại Drive</a>
         </div>

@@ -21,7 +21,8 @@ if ($csrfToken === '' || !hash_equals((string)($_SESSION['csrf'] ?? ''), $csrfTo
 }
 
 $fileId = is_string($payload['file'] ?? null) ? trim($payload['file']) : '';
-$content = is_string($payload['content'] ?? null) ? $payload['content'] : '';
+$paragraphs = $payload['paragraphs'] ?? null;
+$content = is_array($paragraphs) ? $payload : (is_string($payload['content'] ?? null) ? $payload['content'] : '');
 $db = database();
 $fStmt = $db->prepare('SELECT * FROM files WHERE id = ? LIMIT 1');
 $fStmt->execute([$fileId]);

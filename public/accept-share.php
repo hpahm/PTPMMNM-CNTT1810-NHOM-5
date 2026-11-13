@@ -46,4 +46,4 @@ if (!$accepted) {
 }
 
 flash('Đã lưu tệp vào "Được chia sẻ với tôi" thành công!');
-redirect('/shared.php');
+redirect('/shared');

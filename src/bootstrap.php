@@ -209,7 +209,7 @@ function currentUser(bool $refresh = false): ?array {
 function requireLogin(): array {
     $user = currentUser();
     if (!$user) {
-        redirect('/login.php');
+        redirect('/login');
     }
     return $user;
 }
@@ -854,9 +854,9 @@ function docxTextNodeHtml(DOMNode $node, DOMXPath $xpath, array $images = []): s
                     ? $embed->getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed')
                     : '';
                 if ($relationshipId !== '' && isset($images[$relationshipId])) {
-                    $html .= '<img class="docx-embedded-image" src="' . $images[$relationshipId] . '" alt="Ảnh trong tài liệu">';
+                    $html .= '<span class="docx-img-wrap" contenteditable="false"><img class="docx-embedded-image" src="' . $images[$relationshipId] . '" alt="Ảnh trong tài liệu"></span>';
                 } else {
-                    $html .= '<span class="docx-unsupported-object">[Đối tượng nhúng]</span>';
+                    $html .= '<span class="docx-unsupported-object" contenteditable="false">[Đối tượng nhúng]</span>';
                 }
             } else {
                 $html .= docxTextNodeHtml($child, $xpath, $images);
@@ -866,7 +866,7 @@ function docxTextNodeHtml(DOMNode $node, DOMXPath $xpath, array $images = []): s
     return $html;
 }
 
-function docxParagraphHtml(DOMElement $paragraph, DOMXPath $xpath, array $images = []): string {
+function docxParagraphHtml(DOMElement $paragraph, DOMXPath $xpath, array $images = [], ?int $paraIndex = null): string {
     $html = '';
     foreach ($xpath->query('./*[local-name()="r" or local-name()="hyperlink" or local-name()="fldSimple"]', $paragraph) ?: [] as $container) {
         $runProperties = $xpath->query('./*[local-name()="rPr"]', $container)?->item(0);
@@ -884,23 +884,39 @@ function docxParagraphHtml(DOMElement $paragraph, DOMXPath $xpath, array $images
         }
         $html .= $runHtml;
     }
-    return '<p>' . ($html !== '' ? $html : '&nbsp;') . '</p>';
+
+    $styleParts = [];
+    $jc = $xpath->query('./*[local-name()="pPr"]/*[local-name()="jc"]/@*[local-name()="val"]', $paragraph)?->item(0)?->nodeValue;
+    if ($jc === 'center') {
+        $styleParts[] = 'text-align:center';
+    } elseif ($jc === 'right') {
+        $styleParts[] = 'text-align:right';
+    } elseif ($jc === 'both' || $jc === 'justify') {
+        $styleParts[] = 'text-align:justify';
+    }
+    $styleAttr = !empty($styleParts) ? ' style="' . implode(';', $styleParts) . '"' : '';
+    $pidAttr = $paraIndex !== null ? ' data-pid="' . $paraIndex . '"' : '';
+    return '<p' . $pidAttr . $styleAttr . '>' . ($html !== '' ? $html : '&nbsp;') . '</p>';
 }
 
-function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = []): string {
+function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = [], ?array &$counter = null): string {
     $html = '';
     foreach ($container->childNodes as $child) {
         if (!$child instanceof DOMElement) {
             continue;
         }
         if ($child->localName === 'p') {
-            $html .= docxParagraphHtml($child, $xpath, $images);
+            $pid = null;
+            if ($counter !== null) {
+                $pid = $counter['idx']++;
+            }
+            $html .= docxParagraphHtml($child, $xpath, $images, $pid);
         } elseif ($child->localName === 'tbl') {
             $html .= '<table class="docx-table"><tbody>';
             foreach ($xpath->query('./*[local-name()="tr"]', $child) ?: [] as $row) {
                 $html .= '<tr>';
                 foreach ($xpath->query('./*[local-name()="tc"]', $row) ?: [] as $cell) {
-                    $html .= '<td>' . docxBlockHtml($cell, $xpath, $images) . '</td>';
+                    $html .= '<td>' . docxBlockHtml($cell, $xpath, $images, $counter) . '</td>';
                 }
                 $html .= '</tr>';
             }
@@ -959,7 +975,8 @@ function readDocxHtml(string $path): string {
     if (!$body) {
         throw new RuntimeException('DOCX không chứa phần nội dung chính.');
     }
-    $html = docxBlockHtml($body, $xpath, docxImageMap($entries, 'word/document.xml'));
+    $counter = ['idx' => 0];
+    $html = docxBlockHtml($body, $xpath, docxImageMap($entries, 'word/document.xml'), $counter);
     foreach ($entries as $entryName => $entryXml) {
         if (preg_match('#^word/header[^/]*\.xml$#', $entryName)) {
             $header = new DOMDocument();
@@ -967,7 +984,7 @@ function readDocxHtml(string $path): string {
                 $headerXpath = new DOMXPath($header);
                 $headerBody = $headerXpath->query('//*[local-name()="hdr"]')->item(0);
                 if ($headerBody) {
-                    $html = '<div class="docx-header">' . docxBlockHtml($headerBody, $headerXpath, docxImageMap($entries, $entryName)) . '</div>' . $html;
+                    $html = '<div class="docx-header" contenteditable="false">' . docxBlockHtml($headerBody, $headerXpath, docxImageMap($entries, $entryName), null) . '</div>' . $html;
                 }
             }
         } elseif (preg_match('#^word/footer[^/]*\.xml$#', $entryName)) {
@@ -976,12 +993,12 @@ function readDocxHtml(string $path): string {
                 $footerXpath = new DOMXPath($footer);
                 $footerBody = $footerXpath->query('//*[local-name()="ftr"]')->item(0);
                 if ($footerBody) {
-                    $html .= '<div class="docx-footer">' . docxBlockHtml($footerBody, $footerXpath, docxImageMap($entries, $entryName)) . '</div>';
+                    $html .= '<div class="docx-footer" contenteditable="false">' . docxBlockHtml($footerBody, $footerXpath, docxImageMap($entries, $entryName), null) . '</div>';
                 }
             }
         }
     }
-    return $html !== '' ? $html : '<p>&nbsp;</p>';
+    return $html !== '' ? $html : '<p data-pid="0">&nbsp;</p>';
 }
 
 function buildDocxDocumentXml(string $content): string {
@@ -998,11 +1015,114 @@ function buildDocxDocumentXml(string $content): string {
         . '</w:body></w:document>';
 }
 
-function saveDocxContent(string $path, string $content): void {
-    if (strlen($content) > 1_000_000) {
-        throw new RuntimeException('Nội dung DOCX không được vượt quá 1 MB.');
+function saveDocxContent(string $path, string|array $content): void {
+    $entries = zipReadEntries($path, static fn(string $name): bool => $name === 'word/document.xml');
+    $existingXml = $entries['word/document.xml'] ?? null;
+    if ($existingXml === null) {
+        throw new RuntimeException('DOCX không chứa tệp word/document.xml.');
     }
-    zipReplaceEntry($path, 'word/document.xml', buildDocxDocumentXml($content));
+
+    $dom = new DOMDocument();
+    if (!$dom->loadXML($existingXml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+        throw new RuntimeException('Không thể phân tích cú pháp XML của DOCX.');
+    }
+
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+    $bodyParas = $xpath->query('//*[local-name()="body"]//*[local-name()="p"]');
+    if (!$bodyParas || $bodyParas->length === 0) {
+        // Fallback nếu tài liệu chưa có đoạn nào
+        $lines = is_array($content) ? (array)($content['paragraphs'] ?? []) : [ (string)$content ];
+        zipReplaceEntry($path, 'word/document.xml', buildDocxDocumentXml(implode("\n", array_map(fn($item) => is_array($item) ? ($item['text'] ?? '') : (string)$item, $lines))));
+        return;
+    }
+
+    $updates = [];
+    if (is_array($content)) {
+        $items = $content['paragraphs'] ?? $content;
+        if (is_array($items)) {
+            foreach ($items as $item) {
+                if (is_array($item) && isset($item['id'])) {
+                    $updates[(int)$item['id']] = (string)($item['text'] ?? '');
+                }
+            }
+        }
+    } else {
+        $decoded = json_decode($content, true);
+        if (is_array($decoded) && (isset($decoded['paragraphs']) || isset($decoded[0]['id']))) {
+            $items = $decoded['paragraphs'] ?? $decoded;
+            foreach ($items as $item) {
+                if (is_array($item) && isset($item['id'])) {
+                    $updates[(int)$item['id']] = (string)($item['text'] ?? '');
+                }
+            }
+        } else {
+            $lines = preg_split('/\R/u', str_replace(["\r\n", "\r"], "\n", $content)) ?: [$content];
+            foreach ($lines as $lIdx => $line) {
+                $updates[$lIdx] = $line;
+            }
+        }
+    }
+
+    $wNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+    foreach ($updates as $pIdx => $newText) {
+        $pNode = $bodyParas->item($pIdx);
+        if (!$pNode instanceof DOMElement) {
+            continue;
+        }
+
+        // Bảo toàn các thẻ bản vẽ ảnh/hình nhúng (<w:drawing>, <w:pict>, <w:object>)
+        $runsToRemove = [];
+        $firstRunPr = null;
+
+        foreach ($pNode->childNodes as $child) {
+            if (!$child instanceof DOMElement) {
+                continue;
+            }
+            if ($child->localName === 'r') {
+                $hasDrawing = $xpath->query('.//*[local-name()="drawing" or local-name()="pict" or local-name()="object"]', $child)->length > 0;
+                if (!$hasDrawing) {
+                    $runsToRemove[] = $child;
+                    if ($firstRunPr === null) {
+                        $rPr = $xpath->query('./*[local-name()="rPr"]', $child)?->item(0);
+                        if ($rPr instanceof DOMElement) {
+                            $firstRunPr = $rPr->cloneNode(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($runsToRemove as $r) {
+            $pNode->removeChild($r);
+        }
+
+        $cleanText = str_replace(["\r\n", "\r"], "\n", $newText);
+        $cleanText = rtrim($cleanText, "\n");
+        $lines = explode("\n", $cleanText);
+
+        foreach ($lines as $lineIdx => $line) {
+            if ($lineIdx > 0) {
+                $brRun = $dom->createElementNS($wNs, 'w:r');
+                $brRun->appendChild($dom->createElementNS($wNs, 'w:br'));
+                $pNode->appendChild($brRun);
+            }
+            if ($line !== '') {
+                $newRun = $dom->createElementNS($wNs, 'w:r');
+                if ($firstRunPr !== null) {
+                    $newRun->appendChild($firstRunPr->cloneNode(true));
+                }
+                $tNode = $dom->createElementNS($wNs, 'w:t');
+                $tNode->setAttribute('xml:space', 'preserve');
+                $tNode->textContent = $line;
+                $newRun->appendChild($tNode);
+                $pNode->appendChild($newRun);
+            }
+        }
+    }
+
+    zipReplaceEntry($path, 'word/document.xml', $dom->saveXML());
 }
 
 function layoutStart(string $title): void {
@@ -1011,11 +1131,13 @@ function layoutStart(string $title): void {
     $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
     $searchQ = get('q');
     
-    $isHome = $currentPath === '/' && get('folder') === '';
-    $isShared = $currentPath === '/shared.php';
-    $isLogs = $currentPath === '/logs.php';
-    $isReport = $currentPath === '/report.php';
-    $isTrash = $currentPath === '/trash.php';
+    $cleanPath = rtrim($currentPath, '/');
+    if ($cleanPath === '') $cleanPath = '/';
+    $isHome = ($cleanPath === '/' || $cleanPath === '/index.php') && get('folder') === '';
+    $isShared = in_array($cleanPath, ['/shared', '/shared.php'], true);
+    $isLogs = in_array($cleanPath, ['/logs', '/logs.php'], true);
+    $isReport = in_array($cleanPath, ['/report', '/report.php'], true);
+    $isTrash = in_array($cleanPath, ['/trash', '/trash.php'], true);
 
     $navClass = static fn(bool $active): string => $active ? ' class="nav-item active"' : ' class="nav-item"';
 
@@ -1081,7 +1203,7 @@ function uiIcon(string $name, int $size = 18, string $style = ''): string {
     echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
     echo '<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">';
     $cssFile = __DIR__ . '/../public/assets/app.css';
-    $cssVer = file_exists($cssFile) ? (string)filemtime($cssFile) : '2.0';
+    $cssVer = file_exists($cssFile) ? (string)filemtime($cssFile) : '2.1';
     echo '<link rel="stylesheet" href="/assets/app.css?v=' . $cssVer . '">';
     echo '</head><body>';
 
@@ -1104,12 +1226,12 @@ function uiIcon(string $name, int $size = 18, string $style = ''): string {
 
         echo '  <div class="topbar-right">';
         if ($pendingInvites > 0) {
-            echo '    <a href="/shared.php" class="topbar-invite-btn" title="' . $pendingInvites . ' lời mời chia sẻ tệp đang chờ bạn">';
+            echo '    <a href="/shared" class="topbar-invite-btn" title="' . $pendingInvites . ' lời mời chia sẻ tệp đang chờ bạn">';
             echo '      <span class="invite-bell-icon">' . uiIcon('bell', 18) . '</span>';
             echo '      <span class="invite-bell-badge">' . $pendingInvites . '</span>';
             echo '    </a>';
         }
-        echo '    <a href="/report.php" class="topbar-quota-badge" title="Dung lượng đã dùng">';
+        echo '    <a href="/report" class="topbar-quota-badge" title="Dung lượng đã dùng">';
         echo '      <span class="quota-icon">' . uiIcon('cloud', 16) . '</span>';
         echo '      <span>' . formatBytes($usedBytes) . ' / ' . formatBytes($quotaBytes) . '</span>';
         echo '    </a>';
@@ -1124,11 +1246,11 @@ function uiIcon(string $name, int $size = 18, string $style = ''): string {
         echo '          <span class="role-pill ' . h($user['role']) . '">' . h($roleName) . '</span>';
         echo '        </div>';
         echo '        <div class="dropdown-divider"></div>';
-        echo '        <a href="/profile.php" class="dropdown-item">' . uiIcon('user', 16) . ' Hồ sơ & Mật khẩu</a>';
-        echo '        <a href="/report.php" class="dropdown-item">' . uiIcon('chart', 16) . ' Báo cáo lưu trữ (' . $usedPercent . '%)</a>';
-        echo '        <a href="/logs.php" class="dropdown-item">' . uiIcon('clock', 16) . ' Nhật ký hoạt động</a>';
+        echo '        <a href="/profile" class="dropdown-item">' . uiIcon('user', 16) . ' Hồ sơ & Mật khẩu</a>';
+        echo '        <a href="/report" class="dropdown-item">' . uiIcon('chart', 16) . ' Báo cáo lưu trữ (' . $usedPercent . '%)</a>';
+        echo '        <a href="/logs" class="dropdown-item">' . uiIcon('clock', 16) . ' Nhật ký hoạt động</a>';
         echo '        <div class="dropdown-divider"></div>';
-        echo '        <a href="/logout.php" class="dropdown-item text-danger">' . uiIcon('logout', 16) . ' Đăng xuất</a>';
+        echo '        <a href="/logout" class="dropdown-item text-danger">' . uiIcon('logout', 16) . ' Đăng xuất</a>';
         echo '      </div>';
         echo '    </details>';
         echo '  </div>';
@@ -1151,10 +1273,10 @@ function uiIcon(string $name, int $size = 18, string $style = ''): string {
         echo '    <nav class="sidebar-nav">';
         echo '      <a href="/" data-drop-folder="root-' . h($user['id']) . '"' . $navClass($isHome) . '><span class="nav-icon">' . uiIcon('folder', 18) . '</span><span>Tệp của tôi</span></a>';
         $inviteBadgeHtml = $pendingInvites > 0 ? ' <span class="nav-badge-alert">' . $pendingInvites . '</span>' : '';
-        echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">' . uiIcon('share', 18) . '</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
-        echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">' . uiIcon('clock', 18) . '</span><span>Hoạt động</span></a>';
-        echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">' . uiIcon('chart', 18) . '</span><span>Bộ nhớ lưu trữ</span></a>';
-        echo '      <a href="/trash.php"' . $navClass($isTrash) . '><span class="nav-icon">' . uiIcon('trash', 18) . '</span><span>Thùng rác</span></a>';
+        echo '      <a href="/shared"' . $navClass($isShared) . '><span class="nav-icon">' . uiIcon('share', 18) . '</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
+        echo '      <a href="/logs"' . $navClass($isLogs) . '><span class="nav-icon">' . uiIcon('clock', 18) . '</span><span>Hoạt động</span></a>';
+        echo '      <a href="/report"' . $navClass($isReport) . '><span class="nav-icon">' . uiIcon('chart', 18) . '</span><span>Bộ nhớ lưu trữ</span></a>';
+        echo '      <a href="/trash"' . $navClass($isTrash) . '><span class="nav-icon">' . uiIcon('trash', 18) . '</span><span>Thùng rác</span></a>';
         echo '    </nav>';
         echo '    <div class="sidebar-storage">';
         echo '      <div class="storage-meta">';
@@ -1166,19 +1288,19 @@ function uiIcon(string $name, int $size = 18, string $style = ''): string {
         echo '        <div class="storage-fill ' . $barClass . '" style="width:' . $usedPercent . '%"></div>';
         echo '      </div>';
         echo '      <div class="storage-text">' . formatBytes($usedBytes) . ' / ' . formatBytes($quotaBytes) . ' đã dùng</div>';
-        echo '      <a href="/report.php" class="storage-link">Xem chi tiết</a>';
+        echo '      <a href="/report" class="storage-link">Xem chi tiết</a>';
         echo '    </div>';
         echo '  </aside>';
         echo '  <main class="main-content">';
     } else {
         echo '<header class="auth-header">';
-        echo '  <a class="brand" href="/login.php">';
+        echo '  <a class="brand" href="/login">';
         echo '    <div class="drive-logo">' . brandLogoSvg(36, 36) . '</div>';
         echo '    <span class="brand-text">OpenShare</span>';
         echo '  </a>';
         echo '  <div class="auth-nav">';
-        echo '    <a href="/login.php" class="btn-text">Đăng nhập</a>';
-        echo '    <a href="/register.php" class="btn-outline">Tạo tài khoản</a>';
+        echo '    <a href="/login" class="btn-text">Đăng nhập</a>';
+        echo '    <a href="/register" class="btn-outline">Tạo tài khoản</a>';
         echo '  </div>';
         echo '</header>';
         echo '<main class="auth-main">';
@@ -1205,5 +1327,66 @@ function layoutEnd(): void {
     echo '<footer class="global-footer">';
     echo '  <span>OpenShare · Bài tập lớn Phát triển phần mềm mã nguồn mở (Nhóm 5)</span>';
     echo '</footer>';
+    echo '<script>
+(() => {
+    // Tối ưu chuyển tab & trang mượt mà (Instant Navigation)
+    let isFetching = false;
+    document.addEventListener("click", async (e) => {
+        const link = e.target.closest("a");
+        if (!link || !link.href || link.target === "_blank" || link.hasAttribute("download")) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        
+        let url;
+        try { url = new URL(link.href, window.location.href); } catch (_) { return; }
+        if (url.origin !== window.location.origin) return;
+        
+        const path = url.pathname;
+        if (path.includes("/download") || path.includes("/logout") || url.searchParams.get("format") === "csv") return;
+        if (path === window.location.pathname && url.search === window.location.search) return;
+
+        e.preventDefault();
+        if (isFetching) return;
+        isFetching = true;
+
+        const mainContent = document.querySelector(".drive-container, .drive-container-narrow, .auth-card, .preview-workspace") || document.querySelector("main");
+        if (mainContent) mainContent.style.opacity = "0.45";
+
+        try {
+            const res = await fetch(url.href, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+            if (!res.ok) throw new Error("Load failed");
+            const html = await res.text();
+            const doc = new DOMParser().parseFromString(html, "text/html");
+
+            const newContent = doc.querySelector(".drive-container, .drive-container-narrow, .auth-card, .preview-workspace") || doc.querySelector("main");
+            if (newContent && mainContent) {
+                mainContent.replaceWith(newContent);
+                document.title = doc.title;
+                window.history.pushState({}, "", url.href);
+
+                // Cập nhật tab active trên thanh điều hướng
+                document.querySelectorAll(".sidebar-nav a").forEach(a => {
+                    try {
+                        const aUrl = new URL(a.href, window.location.href);
+                        a.classList.toggle("active", aUrl.pathname === url.pathname);
+                    } catch (_) {}
+                });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+                window.location.href = url.href;
+            }
+        } catch (_) {
+            window.location.href = url.href;
+        } finally {
+            isFetching = false;
+            const cur = document.querySelector(".drive-container, .drive-container-narrow, .auth-card, .preview-workspace") || document.querySelector("main");
+            if (cur) cur.style.opacity = "1";
+        }
+    });
+
+    window.addEventListener("popstate", () => {
+        window.location.reload();
+    });
+})();
+</script>';
     echo '</body></html>';
 }

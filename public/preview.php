@@ -114,7 +114,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
                 <?php if ($canEditDocx || $canEditText): ?>
                     <button type="button" class="btn-download-action docx-save-button" id="doc-save-button">Lưu thay đổi</button>
                 <?php endif; ?>
-                <a href="/download.php<?= $downloadQuery ?>" class="btn-download-action" title="Tải tệp về máy">
+                <a href="/download<?= $downloadQuery ?>" class="btn-download-action" title="Tải tệp về máy">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
                     </svg>
@@ -136,11 +136,11 @@ layoutStart('Xem trước · ' . $file['original_name']);
                     <span>Xác nhận để tệp xuất hiện trong mục <em>"Được chia sẻ với tôi"</em> của bạn.</span>
                 </div>
             </div>
-            <form method="post" action="/accept-share.php" class="banner-form">
+            <form method="post" action="/accept-share" class="banner-form">
                 <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                 <input type="hidden" name="share" value="<?= h($share['id']) ?>">
                 <button type="submit" class="btn-save-confirm">Xác nhận lưu</button>
-                <a href="/shared.php" class="btn-save-dismiss">Để sau</a>
+                <a href="/shared" class="btn-save-dismiss">Để sau</a>
             </form>
         </div>
     <?php endif; ?>
@@ -220,7 +220,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
                 <h3>Không thể xem trước định dạng .<?= h(strtoupper($ext)) ?> trực tiếp</h3>
                 <p class="text-muted"><?= $docxError !== '' ? h($docxError) : 'Định dạng này cần được tải về thiết bị để mở bằng ứng dụng tương thích.' ?></p>
                 <div class="action-wrap">
-                    <a href="/download.php<?= $downloadQuery ?>" class="btn btn-primary">
+                    <a href="/download<?= $downloadQuery ?>" class="btn btn-primary">
                         <span>⇩</span> Tải xuống tệp ngay (<?= formatBytes((int)$file['size']) ?>)
                     </a>
                 </div>
@@ -239,8 +239,34 @@ layoutStart('Xem trước · ' . $file['original_name']);
     const editor = docxEditor || textEditor;
     if (!editor || !saveButton) return;
 
-    const endpoint = docxEditor ? '/save-docx.php' : '/save-text.php';
-    const getContent = () => docxEditor ? docxEditor.innerText : textEditor.value;
+    const endpoint = docxEditor ? '/save-docx' : '/save-text';
+    
+    const getPayload = () => {
+        if (!docxEditor) {
+            return {
+                file: editor.dataset.file,
+                share: editor.dataset.share || '',
+                csrf: editor.dataset.csrf,
+                content: textEditor.value
+            };
+        }
+        const paras = [];
+        docxEditor.querySelectorAll('[data-pid]').forEach(p => {
+            const pid = parseInt(p.getAttribute('data-pid'), 10);
+            const clone = p.cloneNode(true);
+            clone.querySelectorAll('[contenteditable="false"]').forEach(el => el.remove());
+            paras.push({
+                id: pid,
+                text: clone.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+            });
+        });
+        return {
+            file: editor.dataset.file,
+            share: editor.dataset.share || '',
+            csrf: editor.dataset.csrf,
+            paragraphs: paras
+        };
+    };
 
     const markDirty = () => {
         if (status && status.textContent !== 'Chưa lưu*') {
@@ -256,12 +282,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-                body: JSON.stringify({
-                    file: editor.dataset.file,
-                    share: editor.dataset.share || '',
-                    csrf: editor.dataset.csrf,
-                    content: getContent()
-                })
+                body: JSON.stringify(getPayload())
             });
             const result = await response.json();
             if (!response.ok || !result.ok) throw new Error(result.error || 'Không thể lưu tài liệu.');
