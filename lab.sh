@@ -7,7 +7,11 @@ case "${1:-help}" in
     command -v php >/dev/null || { echo "THIEU_PHP"; exit 2; }
     php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);' || { echo "CAN_PHP_8_1_TRO_LEN"; exit 2; }
     driver="${OPENSHARE_DB_DRIVER:-sqlite}"
-    php -r "exit(in_array('$driver', PDO::getAvailableDrivers(), true) ? 0 : 1);" || { echo "CAN_PDO_${driver^^}"; exit 2; }
+    php -r "exit(in_array('$driver', PDO::getAvailableDrivers(), true) ? 0 : 1);" || { 
+      echo "CAN_PDO_${driver^^}: Thieu extension driver cho PHP."
+      echo "Tren Ubuntu/Debian, vui long chay: sudo apt install -y php-sqlite3"
+      exit 2
+    }
     echo "MOI_TRUONG=SAN_SANG"
     ;;
   run)

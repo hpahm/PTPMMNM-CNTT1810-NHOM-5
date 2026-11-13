@@ -153,7 +153,7 @@ layoutStart('Thùng rác');
                 <form method="post" onsubmit="return confirm('Xóa vĩnh viễn toàn bộ mục trong thùng rác? Thao tác này không thể hoàn tác.');">
                     <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                     <input type="hidden" name="action" value="empty_trash">
-                    <button type="submit" class="btn btn-danger btn-sm">🗑 Dọn sạch thùng rác</button>
+                    <button type="submit" class="btn btn-danger btn-sm"><?= uiIcon('trash', 14) ?> Dọn sạch thùng rác</button>
                 </form>
             <?php endif; ?>
             <a href="/" class="btn btn-outline btn-sm">‹ Quay lại Drive</a>
@@ -162,7 +162,7 @@ layoutStart('Thùng rác');
 
     <?php if (empty($trashedFiles) && empty($trashedFolders)): ?>
         <div class="empty-state-card">
-            <div class="empty-icon-circle">🗑</div>
+            <div class="empty-icon-circle"><?= uiIcon('trash', 48) ?></div>
             <h3>Thùng rác đang trống</h3>
             <p class="text-muted">Không có tệp hay thư mục nào đã xóa gần đây.</p>
         </div>
@@ -182,7 +182,7 @@ layoutStart('Thùng rác');
                     <tbody>
                         <?php foreach ($trashedFolders as $tf): ?>
                             <tr>
-                                <td><strong>📁 <?= h($tf['name']) ?></strong></td>
+                                <td><span style="display:inline-flex;align-items:center;gap:6px;"><?= uiIcon('folder', 16) ?> <strong><?= h($tf['name']) ?></strong></span></td>
                                 <td>Thư mục</td>
                                 <td>—</td>
                                 <td><?= h(date('d/m/Y H:i', strtotime((string)$tf['deleted_at']))) ?></td>
@@ -193,7 +193,7 @@ layoutStart('Thùng rác');
                                             <input type="hidden" name="type" value="folder">
                                             <input type="hidden" name="id" value="<?= h($tf['id']) ?>">
                                             <input type="hidden" name="action" value="restore">
-                                            <button type="submit" class="btn btn-sm btn-outline">↺ Khôi phục</button>
+                                            <button type="submit" class="btn btn-sm btn-outline">Khôi phục</button>
                                         </form>
                                         <form method="post" style="display:inline;" onsubmit="return confirm('Xóa vĩnh viễn thư mục này và toàn bộ tệp bên trong?');">
                                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
@@ -224,7 +224,7 @@ layoutStart('Thùng rác');
                                             <input type="hidden" name="type" value="file">
                                             <input type="hidden" name="id" value="<?= h($tf['id']) ?>">
                                             <input type="hidden" name="action" value="restore">
-                                            <button type="submit" class="btn btn-sm btn-outline">↺ Khôi phục</button>
+                                            <button type="submit" class="btn btn-sm btn-outline">Khôi phục</button>
                                         </form>
                                         <form method="post" style="display:inline;" onsubmit="return confirm('Xóa vĩnh viễn tệp này?');">
                                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">

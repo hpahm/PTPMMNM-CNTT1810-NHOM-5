@@ -53,8 +53,8 @@ layoutStart('Xác nhận xóa tệp');
 
 <div class="drive-container-narrow">
     <div class="card delete-confirm-card">
-        <div class="delete-icon-box">🗑</div>
-        <h2>Xác nhận xóa tệp</h2>
+        <div class="delete-icon-box"><?= uiIcon('trash', 40) ?></div>
+        <h2>Xác nhận chuyển vào thùng rác</h2>
         
         <div class="file-delete-preview">
             <span class="file-badge badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></span>
@@ -64,21 +64,15 @@ layoutStart('Xác nhận xóa tệp');
             </div>
         </div>
 
-        <?php if ($fileExists): ?>
-            <p class="text-danger-notice">
-                Hành động này sẽ xóa vĩnh viễn tệp vật lý khỏi máy chủ và xóa mọi lịch sử liên kết chia sẻ. Thao tác không thể hoàn tác!
-            </p>
-        <?php else: ?>
-            <p class="text-danger-notice">
-                Tệp vật lý không còn tồn tại trên ổ đĩa. Bạn có muốn dọn dẹp bản ghi tệp này khỏi cơ sở dữ liệu?
-            </p>
-        <?php endif; ?>
+        <p class="text-danger-notice">
+            Tệp sẽ được chuyển vào Thùng rác và có thể khôi phục lại trong vòng 30 ngày trước khi bị dọn dẹp vĩnh viễn.
+        </p>
 
         <form method="post" class="delete-actions-form">
             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
             <a href="/" class="btn btn-outline">Hủy bỏ</a>
             <button type="submit" class="btn btn-danger">
-                <span>🗑</span> Xác nhận xóa vĩnh viễn
+                <?= uiIcon('trash', 16) ?> Chuyển vào thùng rác
             </button>
         </form>
     </div>

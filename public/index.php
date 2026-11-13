@@ -98,7 +98,7 @@ layoutStart($pageTitle);
     ?>
         <div class="invitation-banner">
             <div class="invitation-banner-text">
-                <span class="invitation-banner-icon">📬</span>
+                <span class="invitation-banner-icon"><?= uiIcon('bell', 22) ?></span>
                 <div>
                     <strong>Bạn có <?= $pendingInvites ?> lời mời chia sẻ tệp mới!</strong>
                     <span style="display:block; color: var(--color-text-sub); font-size: 13px;">Người dùng khác đã chia sẻ tệp cho bạn. Vui lòng kiểm tra và xác nhận lưu vào danh sách của bạn.</span>
@@ -126,7 +126,7 @@ layoutStart($pageTitle);
 
     </div>
     <div id="drive-upload-drop-zone" class="drive-upload-drop-zone drop-target" data-drop-folder="<?= h($currentFolderId) ?>" hidden>
-        <span class="drive-upload-drop-icon">⬆</span>
+        <span class="drive-upload-drop-icon"><?= uiIcon('upload', 32) ?></span>
         <span>Thả tệp để tải lên</span>
         <small>Drive của tôi</small>
     </div>
@@ -167,21 +167,21 @@ layoutStart($pageTitle);
                 <?php foreach ($folders as $driveFolder):
                 ?>
                     <div class="drive-folder-card" role="link" tabindex="0" draggable="true" data-folder-link="/?folder=<?= rawurlencode($driveFolder['id']) ?>" data-folder-id="<?= h($driveFolder['id']) ?>" data-drop-folder="<?= h($driveFolder['id']) ?>" data-created="<?= h($driveFolder['created_at']) ?>">
-                        <span class="drive-folder-icon">📁</span>
+                        <span class="drive-folder-icon"><?= uiIcon('folder', 20) ?></span>
                         <span class="drive-folder-name" title="<?= h($driveFolder['name']) ?>"><?= h($driveFolder['name']) ?></span>
                         <span class="folder-menu-anchor">
                             <button type="button" class="folder-more-button" data-folder-menu-button="<?= h($driveFolder['id']) ?>" aria-label="Tùy chọn thư mục">⋮</button>
                             <div class="folder-more-menu" data-folder-menu="<?= h($driveFolder['id']) ?>" hidden>
-                                <a href="/download-folder.php?folder=<?= rawurlencode($driveFolder['id']) ?>">⇩ <span>Tải xuống</span></a>
-                                <button type="button" data-folder-action="rename" data-folder-id="<?= h($driveFolder['id']) ?>">✎ <span>Đổi tên</span></button>
+                                <a href="/download-folder.php?folder=<?= rawurlencode($driveFolder['id']) ?>"><?= uiIcon('download', 14) ?> <span>Tải xuống</span></a>
+                                <button type="button" data-folder-action="rename" data-folder-id="<?= h($driveFolder['id']) ?>"><?= uiIcon('edit', 14) ?> <span>Đổi tên</span></button>
                                 <button type="button" class="folder-sort-trigger" data-folder-action="sort">⇅ <span>Sắp xếp</span><b>›</b></button>
                                 <div class="folder-sort-menu" hidden>
                                     <button type="button" data-sort-folders="name-asc">Tên (A-Z)</button>
                                     <button type="button" data-sort-folders="name-desc">Tên (Z-A)</button>
                                     <button type="button" data-sort-folders="created-desc">Mới nhất</button>
                                 </div>
-                                <button type="button" data-folder-action="info" data-folder-id="<?= h($driveFolder['id']) ?>">ⓘ <span>Chi tiết</span></button>
-                                <button type="button" class="folder-danger" data-folder-action="delete" data-folder-id="<?= h($driveFolder['id']) ?>">🗑 <span>Chuyển vào thùng rác</span></button>
+                                <button type="button" data-folder-action="info" data-folder-id="<?= h($driveFolder['id']) ?>"><?= uiIcon('alert', 14) ?> <span>Chi tiết</span></button>
+                                <button type="button" class="folder-danger" data-folder-action="delete" data-folder-id="<?= h($driveFolder['id']) ?>"><?= uiIcon('trash', 14) ?> <span>Chuyển vào thùng rác</span></button>
                             </div>
                         </span>
                     </div>
@@ -193,7 +193,7 @@ layoutStart($pageTitle);
     <!-- File View: Empty State or File Table/Grid -->
     <?php if (empty($files) && empty($folders)): ?>
         <div class="empty-state-card">
-            <div class="empty-icon-circle">📂</div>
+            <div class="empty-icon-circle"><?= uiIcon('folder', 48) ?></div>
             <h3>Chưa có tệp nào ở đây</h3>
             <p>Kéo và thả tệp vào đây hoặc nhấn nút "Tải tệp lên" để bắt đầu lưu trữ.</p>
         </div>
@@ -234,22 +234,22 @@ layoutStart($pageTitle);
                         <td class="td-status">
                             <?php if ($activeShareCount > 0): ?>
                                 <span class="badge-status status-shared" title="<?= $activeShareCount ?> liên kết hợp lệ">
-                                    🔗 Đang chia sẻ (<?= $activeShareCount ?>)
+                                    Đang chia sẻ (<?= $activeShareCount ?>)
                                 </span>
                             <?php else: ?>
-                                <span class="badge-status status-private">🔒 Riêng tư</span>
+                                <span class="badge-status status-private">Riêng tư</span>
                             <?php endif; ?>
                         </td>
                         <td class="td-actions">
                             <div class="row-btn-group">
-                                <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước">👁</a>
+                                <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
                                 <?php if ($isOwnerOrAdmin): ?>
-                                    <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')">✎</button>
-                                    <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')">📂</button>
-                                    <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Quản lý chia sẻ">🔗</a>
-                                    <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống">⇩</a>
-                                    <a href="/logs.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Lịch sử tải">⏱</a>
-                                    <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác">🗑</a>
+                                    <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')"><?= uiIcon('edit', 14) ?></button>
+                                    <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')"><?= uiIcon('folder', 14) ?></button>
+                                    <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Quản lý chia sẻ"><?= uiIcon('share', 14) ?></a>
+                                    <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
+                                    <a href="/logs.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Lịch sử tải"><?= uiIcon('clock', 14) ?></a>
+                                    <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -269,7 +269,7 @@ layoutStart($pageTitle);
             <div class="drive-card" draggable="<?= $isOwnerOrAdmin ? 'true' : 'false' ?>" data-file-id="<?= h($file['id']) ?>">
                 <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="card-preview-area">
                     <div class="card-file-type badge-<?= h($ext) ?>"><?= h(strtoupper(substr($ext, 0, 4))) ?></div>
-                    <div class="card-preview-symbol">📄</div>
+                    <div class="card-preview-symbol"><?= uiIcon('file', 36) ?></div>
                 </a>
                 <div class="card-body">
                     <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="card-title" title="<?= h($file['original_name']) ?>">
@@ -289,13 +289,13 @@ layoutStart($pageTitle);
                         <?php endif; ?>
                     </div>
                     <div class="card-actions">
-                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước">👁</a>
+                        <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
                         <?php if ($isOwnerOrAdmin): ?>
-                            <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')">✎</button>
-                            <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')">📂</button>
-                            <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Chia sẻ">🔗</a>
-                            <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống">⇩</a>
-                            <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác">🗑</a>
+                            <button type="button" class="btn-action" title="Đổi tên tệp" onclick="renameFileAction('<?= h($file['id']) ?>', '<?= h($file['original_name']) ?>')"><?= uiIcon('edit', 14) ?></button>
+                            <button type="button" class="btn-action" title="Di chuyển vào thư mục" onclick="moveFileAction('<?= h($file['id']) ?>')"><?= uiIcon('folder', 14) ?></button>
+                            <a href="/share.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Chia sẻ"><?= uiIcon('share', 14) ?></a>
+                            <a href="/download.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
+                            <a href="/delete.php?file=<?= rawurlencode($file['id']) ?>" class="btn-action btn-danger-action" title="Chuyển vào thùng rác"><?= uiIcon('trash', 14) ?></a>
                         <?php endif; ?>
                     </div>
                 </div>

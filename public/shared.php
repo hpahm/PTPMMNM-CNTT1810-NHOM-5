@@ -66,7 +66,7 @@ layoutStart('Được chia sẻ với tôi');
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div>
                         <h3 style="color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
-                            <span>📬</span> Lời mời chia sẻ mới (<?= count($pending) ?>)
+                            <span><?= uiIcon('bell', 20) ?></span> Lời mời chia sẻ mới (<?= count($pending) ?>)
                         </h3>
                         <p class="text-muted" style="margin-top: 4px;">Bạn nhận được lời mời chia sẻ tệp. Hãy chọn Chấp nhận để lưu vào Drive của bạn hoặc Từ chối.</p>
                     </div>
@@ -99,9 +99,9 @@ layoutStart('Được chia sẻ với tôi');
                     </div>
 
                     <div class="invitation-card-meta">
-                        <span>📦 <?= formatBytes((int)$file['size']) ?></span>
-                        <span>⏳ Hết hạn: <?= h(date('d/m/Y', strtotime($share['expires_at']))) ?></span>
-                        <span>⇩ Còn <?= $remaining ?> lượt</span>
+                        <span><?= formatBytes((int)$file['size']) ?></span>
+                        <span>Hết hạn: <?= h(date('d/m/Y', strtotime($share['expires_at']))) ?></span>
+                        <span>Còn <?= $remaining ?> lượt tải</span>
                     </div>
 
                     <div class="invitation-actions">
@@ -109,7 +109,7 @@ layoutStart('Được chia sẻ với tôi');
                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                             <input type="hidden" name="share" value="<?= h($share['id']) ?>">
                             <button type="submit" class="btn btn-sm btn-success" title="Chấp nhận và lưu vào Drive của tôi">
-                                <span>✓</span> Chấp nhận
+                                <?= uiIcon('check', 16) ?> Chấp nhận
                             </button>
                         </form>
 
@@ -117,12 +117,12 @@ layoutStart('Được chia sẻ với tôi');
                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                             <input type="hidden" name="share" value="<?= h($share['id']) ?>">
                             <button type="submit" class="btn btn-sm btn-outline" title="Từ chối lời mời">
-                                <span>✕</span> Từ chối
+                                <?= uiIcon('close', 16) ?> Từ chối
                             </button>
                         </form>
 
                         <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn btn-sm btn-outline" style="margin-left: auto;" title="Xem trước nội dung tệp">
-                            <span>👁</span> Xem
+                            <?= uiIcon('eye', 14) ?> Xem
                         </a>
                     </div>
                 </div>
@@ -140,7 +140,7 @@ layoutStart('Được chia sẻ với tôi');
 
         <?php if (empty($accepted)): ?>
             <div class="empty-state-card small">
-                <div class="empty-icon-circle">👥</div>
+                <div class="empty-icon-circle"><?= uiIcon('share', 48) ?></div>
                 <h3>Chưa có tệp nào được lưu</h3>
                 <p class="text-muted">Khi có ai đó chia sẻ tệp cho email của bạn và bạn bấm Chấp nhận, tệp sẽ xuất hiện tại đây.</p>
             </div>
@@ -182,8 +182,8 @@ layoutStart('Được chia sẻ với tôi');
                             <td><?= h(date('d/m/Y H:i', strtotime($share['expires_at']))) ?></td>
                             <td>
                                 <div class="row-btn-group">
-                                    <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Xem trước">👁</a>
-                                    <a href="/download.php?share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Tải xuống">⇩</a>
+                                    <a href="/preview.php?file=<?= rawurlencode($file['id']) ?>&share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                                    <a href="/download.php?share=<?= rawurlencode($share['id']) ?>" class="btn-action" title="Tải xuống"><?= uiIcon('download', 14) ?></a>
                                 </div>
                             </td>
                         </tr>

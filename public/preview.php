@@ -112,7 +112,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
         <div class="preview-actions">
             <?php if ($access): ?>
                 <?php if ($canEditDocx || $canEditText): ?>
-                    <button type="button" class="btn-download-action docx-save-button" id="doc-save-button">💾 Lưu thay đổi</button>
+                    <button type="button" class="btn-download-action docx-save-button" id="doc-save-button">Lưu thay đổi</button>
                 <?php endif; ?>
                 <a href="/download.php<?= $downloadQuery ?>" class="btn-download-action" title="Tải tệp về máy">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -129,14 +129,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
         <div class="preview-accept-banner">
             <div class="banner-left">
                 <div class="banner-icon-badge">
-                    <svg viewBox="0 0 87.3 78" width="22" height="20">
-                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
-                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.25z" fill="#00832d"/>
-                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.25z" fill="#2684fc"/>
-                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-                    </svg>
+                    <?= brandLogoSvg(24, 24) ?>
                 </div>
                 <div class="banner-text">
                     <strong>Bạn muốn lưu tệp này vào Drive?</strong>
@@ -146,7 +139,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
             <form method="post" action="/accept-share.php" class="banner-form">
                 <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
                 <input type="hidden" name="share" value="<?= h($share['id']) ?>">
-                <button type="submit" class="btn-save-confirm">✓ Xác nhận lưu</button>
+                <button type="submit" class="btn-save-confirm">Xác nhận lưu</button>
                 <a href="/shared.php" class="btn-save-dismiss">Để sau</a>
             </form>
         </div>
@@ -157,7 +150,7 @@ layoutStart('Xem trước · ' . $file['original_name']);
         <?php if (!$access): ?>
             <!-- Password Dialog -->
             <div class="preview-locked-card card">
-                <div class="lock-icon">🔒</div>
+                <div class="lock-icon"><?= uiIcon('lock', 36) ?></div>
                 <h3>Liên kết được bảo vệ</h3>
                 <p class="text-muted"><?= h($error) ?></p>
 

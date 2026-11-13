@@ -63,28 +63,28 @@ layoutStart('Báo cáo lưu trữ & Quota');
         </div>
         <div class="header-actions">
             <a href="/report.php?format=csv" class="btn btn-outline btn-sm">
-                <span>📊</span> Xuất báo cáo CSV
+                <?= uiIcon('chart', 16) ?> Xuất báo cáo CSV
             </a>
             <a href="/" class="btn btn-primary btn-sm">‹ Quay lại Drive</a>
         </div>
     </div>
 
-    <?php if (!empty($missing)): ?>
+    <?php if ($user['role'] === 'admin' && !empty($missing)): ?>
         <div class="flash error">
-            ⚠️ <strong>Cảnh báo tệp vật lý:</strong> Phát hiện <?= count($missing) ?> tệp có bản ghi dữ liệu nhưng không còn tồn tại trên ổ đĩa máy chủ.
+            <?= uiIcon('alert', 16) ?> <strong>Cảnh báo tệp vật lý:</strong> Phát hiện <?= count($missing) ?> tệp có bản ghi dữ liệu nhưng không còn tồn tại trên ổ đĩa máy chủ.
         </div>
     <?php endif; ?>
 
-    <?php if ($diskFree !== false && $diskFree < MAX_FILE_BYTES): ?>
+    <?php if ($user['role'] === 'admin' && $diskFree !== false && $diskFree < MAX_FILE_BYTES): ?>
         <div class="flash error">
-            ⚠️ <strong>Cảnh báo dung lượng máy chủ:</strong> Ổ đĩa máy chủ còn ít hơn 10 MB, có thể không tiếp nhận được tệp mới.
+            <?= uiIcon('alert', 16) ?> <strong>Cảnh báo dung lượng máy chủ:</strong> Ổ đĩa máy chủ còn ít hơn 10 MB, có thể không tiếp nhận được tệp mới.
         </div>
     <?php endif; ?>
 
     <!-- Thống kê Quota Dashboard -->
     <div class="dashboard-stats-grid">
         <div class="stat-card">
-            <div class="stat-icon">☁️</div>
+            <div class="stat-icon"><?= uiIcon('cloud', 28) ?></div>
             <div class="stat-content">
                 <span class="stat-title">Dung lượng tài khoản đã dùng</span>
                 <span class="stat-value"><?= formatBytes($usage) ?> <small>/ <?= formatBytes($quota) ?></small></span>
@@ -92,13 +92,13 @@ layoutStart('Báo cáo lưu trữ & Quota');
                     <div class="stat-progress-fill <?= $percent >= 80 ? 'danger' : '' ?>" style="width:<?= $percent ?>%"></div>
                 </div>
                 <span class="stat-hint">
-                    <?= $percent >= 80 ? '⚠️ Đã đạt trên 80% hạn mức!' : 'Dung lượng còn dồi dào (' . (100 - $percent) . '% còn trống).' ?>
+                    <?= $percent >= 80 ? 'Đã đạt trên 80% hạn mức tài khoản.' : 'Dung lượng còn dồi dào (' . (100 - $percent) . '% còn trống).' ?>
                 </span>
             </div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-icon">📁</div>
+            <div class="stat-icon"><?= uiIcon('file', 28) ?></div>
             <div class="stat-content">
                 <span class="stat-title">Tổng số tệp quản lý</span>
                 <span class="stat-value"><?= count($rows) ?> <small>tệp</small></span>
@@ -111,14 +111,16 @@ layoutStart('Báo cáo lưu trữ & Quota');
             </div>
         </div>
 
+        <?php if ($user['role'] === 'admin'): ?>
         <div class="stat-card">
-            <div class="stat-icon">💾</div>
+            <div class="stat-icon"><?= uiIcon('chart', 28) ?></div>
             <div class="stat-content">
                 <span class="stat-title">Ổ đĩa máy chủ còn trống</span>
                 <span class="stat-value"><?= $diskFree === false ? 'Không xác định' : formatBytes((int)$diskFree) ?></span>
-                <span class="stat-hint">Được lưu trữ an toàn tại <code>storage/files/</code></span>
+                <span class="stat-hint">Được lưu trữ tại <code>storage/files/</code></span>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 
     <!-- Bảng chi tiết tệp -->
@@ -155,8 +157,8 @@ layoutStart('Báo cáo lưu trữ & Quota');
                         <td><?= h(date('d/m/Y H:i', strtotime($f['created_at']))) ?></td>
                         <td>
                             <div class="row-btn-group">
-                                <a href="/preview.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Xem trước">👁</a>
-                                <a href="/logs.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Nhật ký">⏱</a>
+                                <a href="/preview.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Xem trước"><?= uiIcon('eye', 14) ?></a>
+                                <a href="/logs.php?file=<?= rawurlencode($f['id']) ?>" class="btn-action" title="Nhật ký"><?= uiIcon('clock', 14) ?></a>
                             </div>
                         </td>
                     </tr>

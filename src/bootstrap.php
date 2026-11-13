@@ -1035,9 +1035,48 @@ function layoutStart(string $title): void {
         };
     }
 
+function brandLogoSvg(int $width = 36, int $height = 36, string $class = 'drive-logo-svg'): string {
+    return '<svg viewBox="0 0 36 36" width="' . $width . '" height="' . $height . '" class="' . $class . '" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        . '<rect width="36" height="36" rx="9" fill="url(#osBrandGrad)"/>'
+        . '<path d="M18 9L27 14.2V24.6L18 29.8L9 24.6V14.2L18 9Z" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>'
+        . '<circle cx="18" cy="18" r="3.2" fill="#ffffff"/>'
+        . '<path d="M18 14.8V10.5M20.8 19.6L25.5 22.3M15.2 19.6L10.5 22.3" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>'
+        . '<defs><linearGradient id="osBrandGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop stop-color="#1a73e8"/><stop offset="1" stop-color="#0d47a1"/></linearGradient></defs>'
+        . '</svg>';
+}
+
+function uiIcon(string $name, int $size = 18, string $style = ''): string {
+    $styleAttr = $style !== '' ? ' style="' . $style . '"' : '';
+    return match ($name) {
+        'folder' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>',
+        'folder-upload' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 7v3h-4v-3H7l5-5 5 5h-3z"/></svg>',
+        'file' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+        'share' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>',
+        'clock' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>',
+        'chart' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>',
+        'trash' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+        'user' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+        'logout' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>',
+        'bell' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>',
+        'cloud' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>',
+        'search' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>',
+        'mail' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>',
+        'lock' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>',
+        'eye' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>',
+        'eye-off' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>',
+        'download' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>',
+        'upload' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>',
+        'edit' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+        'check' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
+        'close' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
+        'alert' => '<svg viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="currentColor"' . $styleAttr . '><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>',
+        default => '',
+    };
+}
+
     echo '<!doctype html><html lang="vi"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width,initial-scale=1">';
-    echo '<title>' . h($title) . ' · OpenShare Drive</title>';
+    echo '<title>' . h($title) . ' · OpenShare</title>';
     echo '<link rel="preconnect" href="https://fonts.googleapis.com">';
     echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
     echo '<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">';
@@ -1049,38 +1088,29 @@ function layoutStart(string $title): void {
     if ($user) {
         echo '<header class="topbar">';
         echo '  <div class="topbar-left">';
-        echo '    <a class="brand" href="/" title="OpenShare Drive">';
-        echo '      <div class="drive-logo">';
-        echo '        <svg viewBox="0 0 87.3 78" class="drive-logo-svg">';
-        echo '          <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>';
-        echo '          <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>';
-        echo '          <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>';
-        echo '          <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.25z" fill="#00832d"/>';
-        echo '          <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.25z" fill="#2684fc"/>';
-        echo '          <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>';
-        echo '        </svg>';
-        echo '      </div>';
-        echo '      <span class="brand-text">Drive</span>';
+        echo '    <a class="brand" href="/" title="OpenShare">';
+        echo '      <div class="drive-logo">' . brandLogoSvg(34, 34) . '</div>';
+        echo '      <span class="brand-text">OpenShare</span>';
         echo '    </a>';
         echo '  </div>';
 
         echo '  <form class="search-bar" method="get" action="/">';
-        echo '    <button type="submit" class="search-icon" aria-label="Tìm kiếm">🔍</button>';
-        echo '    <input type="text" name="q" value="' . h($searchQ) . '" placeholder="Tìm kiếm trong Drive..." autocomplete="off">';
+        echo '    <button type="submit" class="search-icon" aria-label="Tìm kiếm">' . uiIcon('search', 16) . '</button>';
+        echo '    <input type="text" name="q" value="' . h($searchQ) . '" placeholder="Tìm kiếm tệp..." autocomplete="off">';
         if ($searchQ !== '') {
-            echo '    <a href="/" class="search-clear" title="Xóa tìm kiếm">✕</a>';
+            echo '    <a href="/" class="search-clear" title="Xóa tìm kiếm">' . uiIcon('close', 14) . '</a>';
         }
         echo '  </form>';
 
         echo '  <div class="topbar-right">';
         if ($pendingInvites > 0) {
             echo '    <a href="/shared.php" class="topbar-invite-btn" title="' . $pendingInvites . ' lời mời chia sẻ tệp đang chờ bạn">';
-            echo '      <span class="invite-bell-icon">📬</span>';
+            echo '      <span class="invite-bell-icon">' . uiIcon('bell', 18) . '</span>';
             echo '      <span class="invite-bell-badge">' . $pendingInvites . '</span>';
             echo '    </a>';
         }
         echo '    <a href="/report.php" class="topbar-quota-badge" title="Dung lượng đã dùng">';
-        echo '      <span class="quota-icon">☁</span>';
+        echo '      <span class="quota-icon">' . uiIcon('cloud', 16) . '</span>';
         echo '      <span>' . formatBytes($usedBytes) . ' / ' . formatBytes($quotaBytes) . '</span>';
         echo '    </a>';
         echo '    <details class="user-menu">';
@@ -1094,11 +1124,11 @@ function layoutStart(string $title): void {
         echo '          <span class="role-pill ' . h($user['role']) . '">' . h($roleName) . '</span>';
         echo '        </div>';
         echo '        <div class="dropdown-divider"></div>';
-        echo '        <a href="/profile.php" class="dropdown-item">👤 Hồ sơ & Mật khẩu</a>';
-        echo '        <a href="/report.php" class="dropdown-item">📊 Báo cáo lưu trữ (' . $usedPercent . '%)</a>';
-        echo '        <a href="/logs.php" class="dropdown-item">⏱ Nhật ký hoạt động</a>';
+        echo '        <a href="/profile.php" class="dropdown-item">' . uiIcon('user', 16) . ' Hồ sơ & Mật khẩu</a>';
+        echo '        <a href="/report.php" class="dropdown-item">' . uiIcon('chart', 16) . ' Báo cáo lưu trữ (' . $usedPercent . '%)</a>';
+        echo '        <a href="/logs.php" class="dropdown-item">' . uiIcon('clock', 16) . ' Nhật ký hoạt động</a>';
         echo '        <div class="dropdown-divider"></div>';
-        echo '        <a href="/logout.php" class="dropdown-item text-danger">↪ Đăng xuất</a>';
+        echo '        <a href="/logout.php" class="dropdown-item text-danger">' . uiIcon('logout', 16) . ' Đăng xuất</a>';
         echo '      </div>';
         echo '    </details>';
         echo '  </div>';
@@ -1108,24 +1138,23 @@ function layoutStart(string $title): void {
         echo '  <aside class="sidebar">';
         echo '    <div class="sidebar-action">';
         echo '      <button type="button" class="btn-new" id="new-menu-button" aria-expanded="false">';
-        echo '        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#EA4335" d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/><path fill="#4285F4" d="M11 11V5h2v6z"/><path fill="#FBBC05" d="M19 11v2h-6v-2z"/><path fill="#34A853" d="M11 13v6h2v-6z"/></svg>';
-        echo '        <span>Mới</span>';
+        echo '        ' . uiIcon('upload', 18) . ' <span>Mới</span>';
         echo '      </button>';
         echo '      <div class="new-menu" id="new-menu" hidden>';
-        echo '        <button type="button" data-new-action="folder">📁 <span>Tạo thư mục mới</span></button>';
-        echo '        <button type="button" data-new-action="file">📄 <span>Tải tệp lên</span></button>';
-        echo '        <button type="button" data-new-action="folder-upload">📂 <span>Tải thư mục lên</span></button>';
+        echo '        <button type="button" data-new-action="folder">' . uiIcon('folder', 16) . ' <span>Tạo thư mục mới</span></button>';
+        echo '        <button type="button" data-new-action="file">' . uiIcon('file', 16) . ' <span>Tải tệp lên</span></button>';
+        echo '        <button type="button" data-new-action="folder-upload">' . uiIcon('folder-upload', 16) . ' <span>Tải thư mục lên</span></button>';
         echo '      </div>';
         echo '      <input type="file" id="new-file-input" class="visually-hidden" multiple accept="' . h('.' . implode(',.', array_keys(ALLOWED_MIME_TYPES))) . '">';
         echo '      <input type="file" id="new-folder-input" class="visually-hidden" webkitdirectory directory multiple>';
         echo '    </div>';
         echo '    <nav class="sidebar-nav">';
-        echo '      <a href="/" data-drop-folder="root-' . h($user['id']) . '"' . $navClass($isHome) . '><span class="nav-icon">📁</span><span>Drive của tôi</span></a>';
+        echo '      <a href="/" data-drop-folder="root-' . h($user['id']) . '"' . $navClass($isHome) . '><span class="nav-icon">' . uiIcon('folder', 18) . '</span><span>Tệp của tôi</span></a>';
         $inviteBadgeHtml = $pendingInvites > 0 ? ' <span class="nav-badge-alert">' . $pendingInvites . '</span>' : '';
-        echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">👥</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
-        echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">⏱</span><span>Hoạt động</span></a>';
-        echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">📊</span><span>Bộ nhớ lưu trữ</span></a>';
-        echo '      <a href="/trash.php"' . $navClass($isTrash) . '><span class="nav-icon">🗑</span><span>Thùng rác</span></a>';
+        echo '      <a href="/shared.php"' . $navClass($isShared) . '><span class="nav-icon">' . uiIcon('share', 18) . '</span><span>Được chia sẻ với tôi' . $inviteBadgeHtml . '</span></a>';
+        echo '      <a href="/logs.php"' . $navClass($isLogs) . '><span class="nav-icon">' . uiIcon('clock', 18) . '</span><span>Hoạt động</span></a>';
+        echo '      <a href="/report.php"' . $navClass($isReport) . '><span class="nav-icon">' . uiIcon('chart', 18) . '</span><span>Bộ nhớ lưu trữ</span></a>';
+        echo '      <a href="/trash.php"' . $navClass($isTrash) . '><span class="nav-icon">' . uiIcon('trash', 18) . '</span><span>Thùng rác</span></a>';
         echo '    </nav>';
         echo '    <div class="sidebar-storage">';
         echo '      <div class="storage-meta">';
@@ -1144,16 +1173,7 @@ function layoutStart(string $title): void {
     } else {
         echo '<header class="auth-header">';
         echo '  <a class="brand" href="/login.php">';
-        echo '    <div class="drive-logo">';
-        echo '      <svg viewBox="0 0 87.3 78" class="drive-logo-svg">';
-        echo '        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>';
-        echo '        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>';
-        echo '        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>';
-        echo '        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.25z" fill="#00832d"/>';
-        echo '        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.25z" fill="#2684fc"/>';
-        echo '        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>';
-        echo '      </svg>';
-        echo '    </div>';
+        echo '    <div class="drive-logo">' . brandLogoSvg(36, 36) . '</div>';
         echo '    <span class="brand-text">OpenShare</span>';
         echo '  </a>';
         echo '  <div class="auth-nav">';
@@ -1166,11 +1186,11 @@ function layoutStart(string $title): void {
 
     if ($flash) {
         $flashType = $flash[0] === 'error' ? 'toast-error' : 'toast-ok';
-        $flashIcon = $flash[0] === 'error' ? '⚠️' : '✓';
+        $iconSvg = $flash[0] === 'error' ? uiIcon('alert', 18) : uiIcon('check', 18);
         echo '<div class="toast-banner ' . h($flashType) . '">';
-        echo '  <span class="toast-icon">' . $flashIcon . '</span>';
+        echo '  <span class="toast-icon">' . $iconSvg . '</span>';
         echo '  <span class="toast-text">' . h($flash[1]) . '</span>';
-        echo '  <button type="button" class="toast-close" onclick="this.parentElement.remove()">✕</button>';
+        echo '  <button type="button" class="toast-close" onclick="this.parentElement.remove()" aria-label="Đóng">' . uiIcon('close', 14) . '</button>';
         echo '</div>';
     }
 }

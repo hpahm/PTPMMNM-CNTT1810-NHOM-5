@@ -130,8 +130,8 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
                 <div class="form-group col-12">
                     <label for="share-access">Phạm vi truy cập</label>
                     <select name="access" id="share-access" class="form-control">
-                        <option value="public">🌐 Bất kỳ ai có liên kết (Công khai)</option>
-                        <option value="recipient">👤 Tài khoản cụ thể (Người nhận riêng)</option>
+                        <option value="public">Bất kỳ ai có liên kết (Công khai)</option>
+                        <option value="recipient">Tài khoản cụ thể (Người nhận riêng)</option>
                     </select>
                 </div>
             </div>
@@ -162,7 +162,7 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">
-                    <span>🔗</span> Tạo liên kết chia sẻ
+                    <?= uiIcon('share', 16) ?> Tạo liên kết chia sẻ
                 </button>
             </div>
         </form>
@@ -199,7 +199,7 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
                             $active = validShare($share, time());
                             $waiting = (int)($share['waiting_count'] ?? 0);
                             $shareUrl = 'http' . (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 's' : '') . '://' . ($_SERVER['HTTP_HOST'] ?? '127.0.0.1:8127') . '/preview.php?file=' . rawurlencode($fileId) . '&share=' . rawurlencode($share['id']);
-                            $recipientLabel = isPublicShare($share) ? '🌐 Công khai' : ($share['recipient_email'] ?? $share['recipient_id']);
+                            $recipientLabel = isPublicShare($share) ? 'Công khai' : ($share['recipient_email'] ?? $share['recipient_id']);
                         ?>
                         <tr>
                             <td><strong><?= h($recipientLabel) ?></strong></td>
@@ -237,7 +237,7 @@ layoutStart('Chia sẻ: ' . $file['original_name']);
                                             <input type="hidden" name="action" value="update_password">
                                             <input type="hidden" name="share_id" value="<?= h($share['id']) ?>">
                                             <input type="password" name="new_password" placeholder="<?= $share['password_hash'] ? 'Đổi/bỏ MK' : 'Đặt MK' ?>" style="width:95px;padding:4px 6px;font-size:12px;border:1px solid #d0d7de;border-radius:6px;">
-                                            <button type="submit" class="btn btn-sm btn-outline" title="Đặt hoặc để trống để gỡ mật khẩu">🔑</button>
+                                            <button type="submit" class="btn btn-sm btn-outline" title="Đặt hoặc để trống để gỡ mật khẩu"><?= uiIcon('lock', 14) ?></button>
                                         </form>
                                         <form method="post" action="/revoke.php" onsubmit="return confirm('Bạn có chắc muốn thu hồi liên kết này không?');">
                                             <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">

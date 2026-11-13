@@ -59,18 +59,26 @@ $logs = $lStmt->fetchAll(PDO::FETCH_ASSOC);
 
 function translateAction(string $action): string {
     return match ($action) {
-        'upload' => '⬆ Tải tệp lên',
-        'download' => '⇩ Tải tệp xuống',
-        'download_denied' => '⛔ Bị từ chối tải',
-        'download_queued' => '⏳ Xếp hàng tải (FIFO)',
-        'share_created' => '🔗 Tạo liên kết chia sẻ',
-        'share_revoked' => '🚫 Thu hồi liên kết',
-        'share_accepted' => '✓ Xác nhận lưu tệp',
-        'share_declined' => '✕ Từ chối lời mời',
-        'file_deleted' => '🗑 Xóa tệp',
-        'expired_file_deleted' => '🧹 Dọn tệp hết hạn',
-        'folder_created' => '📁 Tạo thư mục',
-        'register' => '👤 Đăng ký tài khoản',
+        'upload' => 'Tải tệp lên',
+        'download' => 'Tải tệp xuống',
+        'download_denied' => 'Bị từ chối tải',
+        'download_queued' => 'Xếp hàng tải (FIFO)',
+        'share_created' => 'Tạo liên kết chia sẻ',
+        'share_revoked' => 'Thu hồi liên kết',
+        'share_accepted' => 'Xác nhận lưu tệp',
+        'share_declined' => 'Từ chối lời mời',
+        'file_deleted' => 'Xóa tệp',
+        'expired_file_deleted' => 'Dọn tệp hết hạn',
+        'folder_created' => 'Tạo thư mục',
+        'folder_restored' => 'Khôi phục thư mục',
+        'file_restored' => 'Khôi phục tệp',
+        'trash_emptied' => 'Dọn sạch thùng rác',
+        'profile_updated' => 'Cập nhật hồ sơ',
+        'password_changed' => 'Đổi mật khẩu',
+        'file_renamed' => 'Đổi tên tệp',
+        'folder_renamed' => 'Đổi tên thư mục',
+        'file_moved' => 'Di chuyển tệp',
+        'register' => 'Đăng ký tài khoản',
         default => $action,
     };
 }
@@ -101,7 +109,7 @@ layoutStart('Nhật ký hoạt động');
 
         <?php if (empty($logs)): ?>
             <div class="empty-state-card small">
-                <div class="empty-icon-circle">⏱</div>
+                <div class="empty-icon-circle"><?= uiIcon('clock', 48) ?></div>
                 <p class="text-muted">Chưa ghi nhận hoạt động nào trong hệ thống.</p>
             </div>
         <?php else: ?>
