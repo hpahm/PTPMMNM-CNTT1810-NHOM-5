@@ -185,8 +185,12 @@ $docWithTableXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 zipWriteArchive($docxTestPath, [
     ['name' => '[Content_Types].xml', 'data' => '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>'],
     ['name' => 'word/document.xml', 'data' => $docWithTableXml],
+    ['name' => 'word/header1.xml', 'data' => '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Header mẫu</w:t></w:r></w:p></w:hdr>'],
+    ['name' => 'word/footer1.xml', 'data' => '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Footer mẫu</w:t></w:r></w:p></w:ftr>'],
     ['name' => 'word/media/logo.png', 'data' => 'FAKE_IMAGE_BYTES'],
 ]);
+$previewHtmlWithHeaderFooter = readDocxHtml($docxTestPath);
+check(str_contains($previewHtmlWithHeaderFooter, 'Header mẫu') && str_contains($previewHtmlWithHeaderFooter, 'Footer mẫu'), 'Đọc DOCX có Header và Footer không lỗi tham chiếu');
 saveDocxContent($docxTestPath, [
     'paragraphs' => [
         ['id' => 0, 'text' => 'Tiêu đề đã sửa'],

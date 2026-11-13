@@ -899,7 +899,7 @@ function docxParagraphHtml(DOMElement $paragraph, DOMXPath $xpath, array $images
     return '<p' . $pidAttr . $styleAttr . '>' . ($html !== '' ? $html : '&nbsp;') . '</p>';
 }
 
-function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = [], ?array &$counter = null): string {
+function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = [], ?stdClass $counter = null): string {
     $html = '';
     foreach ($container->childNodes as $child) {
         if (!$child instanceof DOMElement) {
@@ -908,7 +908,7 @@ function docxBlockHtml(DOMNode $container, DOMXPath $xpath, array $images = [], 
         if ($child->localName === 'p') {
             $pid = null;
             if ($counter !== null) {
-                $pid = $counter['idx']++;
+                $pid = $counter->idx++;
             }
             $html .= docxParagraphHtml($child, $xpath, $images, $pid);
         } elseif ($child->localName === 'tbl') {
@@ -975,7 +975,7 @@ function readDocxHtml(string $path): string {
     if (!$body) {
         throw new RuntimeException('DOCX không chứa phần nội dung chính.');
     }
-    $counter = ['idx' => 0];
+    $counter = (object)['idx' => 0];
     $html = docxBlockHtml($body, $xpath, docxImageMap($entries, 'word/document.xml'), $counter);
     foreach ($entries as $entryName => $entryXml) {
         if (preg_match('#^word/header[^/]*\.xml$#', $entryName)) {
