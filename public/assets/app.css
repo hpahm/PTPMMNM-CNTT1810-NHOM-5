@@ -2184,12 +2184,23 @@ button, input, select, textarea {
 .drive-container-narrow,
 .preview-workspace,
 .auth-card {
-    transition: opacity 0.15s ease-in-out;
+    animation: driveFadeIn 0.15s ease-out;
+}
+
+@keyframes driveFadeIn {
+    from {
+        opacity: 0.88;
+        transform: translateY(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .drive-table-wrap,
 .drive-grid {
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    animation: driveFadeIn 0.2s ease-out;
 }
 
 .filter-pill {

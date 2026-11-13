@@ -71,13 +71,14 @@ Tài liệu này tổng hợp các thay đổi về kiến trúc, hiệu năng, 
   - `saveDocxContent()` nạp tệp `word/document.xml` gốc và cập nhật văn bản trực tiếp tại các đoạn được chỉnh sửa (in-place XML update), bảo toàn tuyệt đối thuộc tính đoạn (`w:pPr`), cấu trúc bảng (`w:tbl`, `w:tcPr`), đối tượng đồ họa/ảnh nhúng (`w:drawing`, `w:pict`), phần đầu/chân trang và cài đặt trang (`w:sectPr`).
   - Tệp tải về giữ nguyên vẹn 100% định dạng, biểu mẫu và hình ảnh gốc khi mở trên Microsoft Word, LibreOffice hoặc Google Docs.
 
-### 2. Định dạng Clean URLs (Không hiển thị phần mở rộng `.php`)
-- Chuẩn hóa toàn bộ hệ thống đường dẫn nội bộ không còn đuôi `.php` (ví dụ `/shared`, `/logs`, `/report`, `/trash`, `/profile`, `/login`, `/register`, `/preview`, `/share`, `/download`).
+### 2. Định dạng Clean URLs và Điều phối an toàn tránh vòng lặp chuyển hướng
+- Chuẩn hóa toàn bộ hệ thống đường dẫn nội bộ không còn đuôi `.php` (ví dụ `/shared`, `/logs`, `/report`, `/trash`, `/profile`, `/login`, `/register`, `/preview`, `/share`, `/download`, `/logout`).
+- Bổ sung bộ điều hướng tự động ngay tại đầu tệp `public/index.php`: Khi Nginx hoặc Apache chuyển tiếp các Clean URL sạch về `index.php`, hệ thống tự động nhận diện và gọi trực tiếp tệp script tương ứng mà không kích hoạt kiểm tra đăng nhập của trang chủ, loại bỏ triệt để nguy cơ vòng lặp chuyển hướng 302 (`ERR_TOO_MANY_REDIRECTS`).
 - Bổ sung `router.php` phục vụ việc chạy thử nghiệm mượt mà trên môi trường PHP Built-in Server (`lab.ps1 run` và `lab.sh run`).
-- Cập nhật cấu hình Nginx trong hướng dẫn triển khai (`DEPLOY_VPS.md`) với chỉ thị `try_files $uri $uri/ $uri.php$is_args$args /index.php$is_args$args;`, giúp máy chủ production tự động xử lý Clean URLs mà vẫn hỗ trợ các URL cũ có đuôi `.php` để tương thích ngược.
+- Cập nhật cấu hình chuẩn Nginx trong `DEPLOY_VPS.md` với `try_files $uri $uri/ /index.php$is_args$args;`, đồng thời bổ sung lưu ý cấu hình Cloudflare SSL (chế độ Full / Full Strict) để ngăn ngừa xung đột chuyển hướng giữa Cloudflare Proxy và Nginx.
 
-### 3. Tối ưu hóa chuyển tab và điều hướng trang mượt mà (Instant Navigation)
-- Triển khai cơ chế điều hướng tức thì không giật/chớp trắng màn hình khi người dùng chuyển đổi giữa các mục ("Tệp của tôi", "Được chia sẻ với tôi", "Nhật ký", "Bộ nhớ lưu trữ", "Thùng rác") hoặc thao tác bộ lọc danh sách tệp.
-- Bổ sung hiệu ứng chuyển động CSS mượt mà cho bảng tệp và lưới hiển thị tệp, nâng cao trải nghiệm ứng dụng web hiện đại.
-- Loại bỏ toàn bộ Emoji, thay thế bằng bộ SVG Vector phẳng và tích hợp Logo OpenShare độc quyền để tránh vi phạm bản quyền.
+### 3. Tối ưu hóa chuyển tab và bảo toàn sự kiện tương tác
+- Tối ưu chuyển tab bằng hiệu ứng chuyển động CSS thuần (`@keyframes driveFadeIn`) kết hợp bộ đệm trình duyệt, loại bỏ chớp trắng màn hình mà không can thiệp vào vòng đời DOM.
+- Loại bỏ hoàn toàn cơ chế tráo đổi HTML thủ công qua AJAX để bảo toàn 100% sự kiện bấm nút, mở modal, bật menu thao tác và submit biểu mẫu đăng nhập/đăng xuất.
+- Chuẩn hóa toàn bộ biểu tượng sang SVG Vector phẳng theo phong cách Google Drive và tích hợp Logo OpenShare độc quyền để tránh vi phạm bản quyền.
 

@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+// Bộ định tuyến Clean URLs nội bộ (Xử lý khi Nginx / Apache chuyển tiếp request sạch về index.php)
+$requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$cleanRoute = trim($requestUri, '/');
+if ($cleanRoute !== '' && $cleanRoute !== 'index' && preg_match('/^[a-z0-9\-]+$/i', $cleanRoute)) {
+    $targetFile = __DIR__ . '/' . $cleanRoute . '.php';
+    if (is_file($targetFile)) {
+        require $targetFile;
+        exit;
+    }
+}
+
 require_once __DIR__ . '/../src/bootstrap.php';
 startApp();
 

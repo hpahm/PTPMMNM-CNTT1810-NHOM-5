@@ -38,3 +38,4 @@ if (str_ends_with($uri, '.php') && is_file($publicDir . $uri)) {
 // 5. Fallback về index.php
 require $publicDir . '/index.php';
 return true;
+

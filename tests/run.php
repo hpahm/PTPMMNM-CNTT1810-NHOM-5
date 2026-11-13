@@ -207,11 +207,15 @@ $r1 = requestDownloadSlotSql($db, 'test-share-01', 'recipient', time());
 $r2 = requestDownloadSlotSql($db, 'test-share-01', 'owner', time());
 check($r1['status'] === 'granted' && $r2['status'] === 'queued' && $r2['position'] === 1, 'Cấp lượt và xếp hàng FIFO qua SQL nguyên tử');
 
-// Phép thử: Bộ điều hướng Clean URL (router.php)
+// Phép thử: Bộ điều hướng Clean URL (router.php & public/index.php)
 $sessionPath = APP_ROOT . '/storage/sessions';
 $cmd = 'php -d "session.save_path=' . escapeshellarg($sessionPath) . '" -r "$_SERVER[\'REQUEST_URI\']=\'/login\'; require \'router.php\';"';
 $routeOut = (string)shell_exec($cmd);
 check(str_contains($routeOut, 'Đăng nhập OpenShare'), 'Bộ điều hướng Clean URL (/login)');
+
+$cmdIndex = 'php -d "session.save_path=' . escapeshellarg($sessionPath) . '" -r "$_SERVER[\'REQUEST_URI\']=\'/login\'; require \'public/index.php\';"';
+$indexOut = (string)shell_exec($cmdIndex);
+check(str_contains($indexOut, 'Đăng nhập OpenShare'), 'Điều phối Clean URL qua public/index.php tránh vòng lặp chuyển hướng');
 
 echo "TESTS=$passed FAILED=$failed\n";
 exit($failed === 0 ? 0 : 1);
