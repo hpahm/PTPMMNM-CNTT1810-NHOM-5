@@ -108,6 +108,12 @@ withStore(function(array &$store): void {
 check(!validShare(readStore()['shares']['required-share'], time()), 'Liên kết đã thu hồi không được trả nội dung');
 check(!allowedExtension('malware.exe') && !detectedMimeIsAllowed('required.txt', __FILE__), 'Từ chối tệp sai loại hoặc nội dung không khớp');
 
+// Phép thử: Chấp nhận video MP4 quay từ trình duyệt (Vivaldi/QuickTime container ftypqt)
+$qtTmp = tempnam(sys_get_temp_dir(), 'os_qt_');
+file_put_contents($qtTmp, pack('N', 20) . 'ftypqt  ' . pack('N', 0) . 'qt  ');
+check(detectedMimeIsAllowed('Drive của tôi · OpenShare - Vivaldi 2026-11-19 03-06-15.mp4', $qtTmp), 'Chấp nhận tệp video MP4/QuickTime quay màn hình từ Vivaldi');
+@unlink($qtTmp);
+
 check(is_file(FILE_ROOT . '/test-file-01.bin'), 'Tệp còn liên kết hợp lệ vẫn được giữ trên ổ đĩa');
 $preview = (string)shell_exec('php ' . escapeshellarg(APP_ROOT . '/tools/cleanup.php') . ' --preview');
 check(str_contains($preview, 'Xem truoc') && is_file(FILE_ROOT . '/test-file-01.bin'), 'Chế độ xem trước không xóa tệp');

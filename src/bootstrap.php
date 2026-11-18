@@ -72,16 +72,20 @@ const ALLOWED_MIME_TYPES = [
     'json' => ['text/plain', 'application/json'],
     'xml'  => ['text/plain', 'text/xml', 'application/xml'],
     'rtf'  => ['application/rtf', 'text/rtf'],
-    'jpg'  => ['image/jpeg'],
-    'jpeg' => ['image/jpeg'],
-    'png'  => ['image/png'],
+    'jpg'  => ['image/jpeg', 'image/pjpeg'],
+    'jpeg' => ['image/jpeg', 'image/pjpeg'],
+    'png'  => ['image/png', 'image/x-png'],
     'gif'  => ['image/gif'],
     'webp' => ['image/webp'],
     'bmp'  => ['image/bmp', 'image/x-ms-bmp'],
     'mp3'  => ['audio/mpeg', 'audio/mp3', 'application/octet-stream'],
     'wav'  => ['audio/wav', 'audio/x-wav', 'audio/wave'],
-    'mp4'  => ['video/mp4', 'application/mp4'],
-    'webm' => ['video/webm', 'audio/webm'],
+    'mp4'  => ['video/mp4', 'application/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/x-matroska', 'video/3gpp', 'application/octet-stream'],
+    'webm' => ['video/webm', 'audio/webm', 'video/x-matroska', 'video/mp4'],
+    'mov'  => ['video/quicktime', 'video/mp4'],
+    'mkv'  => ['video/x-matroska', 'video/webm', 'video/mp4'],
+    'm4a'  => ['audio/mp4', 'audio/x-m4a', 'audio/aac'],
+    'ogg'  => ['audio/ogg', 'video/ogg', 'application/ogg'],
     'zip'  => ['application/zip', 'application/x-zip-compressed'],
     'rar'  => ['application/x-rar-compressed', 'application/vnd.rar', 'application/x-rar'],
     '7z'   => ['application/x-7z-compressed'],
@@ -632,8 +636,28 @@ function allowedExtension(string $name): bool {
 
 function detectedMimeIsAllowed(string $name, string $path): bool {
     $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $allowed = ALLOWED_MIME_TYPES[$extension] ?? null;
+    if ($allowed === null) {
+        return false;
+    }
     $mime = is_file($path) ? (mime_content_type($path) ?: '') : '';
-    return in_array($mime, ALLOWED_MIME_TYPES[$extension] ?? [], true);
+    if ($mime === '') {
+        return false;
+    }
+    if (in_array($mime, $allowed, true)) {
+        return true;
+    }
+    // Hỗ trợ linh hoạt các container media/video từ trình duyệt và phần mềm quay màn hình (Vivaldi, OBS, QuickTime)
+    if (in_array($extension, ['mp4', 'webm', 'mov', 'mkv'], true) && str_starts_with($mime, 'video/')) {
+        return true;
+    }
+    if (in_array($extension, ['mp3', 'wav', 'm4a', 'ogg'], true) && str_starts_with($mime, 'audio/')) {
+        return true;
+    }
+    if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true) && str_starts_with($mime, 'image/')) {
+        return true;
+    }
+    return false;
 }
 
 function diskHasSpace(int $bytes): bool {

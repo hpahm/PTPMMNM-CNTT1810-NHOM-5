@@ -171,11 +171,11 @@ layoutStart('Xem trước · ' . $file['original_name']);
                      class="preview-image-element"
                      loading="eager">
             </div>
-        <?php elseif (in_array($ext, ['mp4', 'webm'], true)): ?>
+        <?php elseif (in_array($ext, ['mp4', 'webm', 'mov', 'mkv'], true)): ?>
             <div class="preview-stage image-stage">
                 <video controls style="max-width:100%;max-height:78vh;border-radius:10px;" src="/preview-content.php<?= $contentQuery ?>"></video>
             </div>
-        <?php elseif (in_array($ext, ['mp3', 'wav'], true)): ?>
+        <?php elseif (in_array($ext, ['mp3', 'wav', 'm4a', 'ogg'], true)): ?>
             <div class="preview-stage image-stage">
                 <audio controls style="width:min(520px,90%);" src="/preview-content.php<?= $contentQuery ?>"></audio>
             </div>

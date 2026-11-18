@@ -82,3 +82,14 @@ Tài liệu này tổng hợp các thay đổi về kiến trúc, hiệu năng, 
 - Loại bỏ hoàn toàn cơ chế tráo đổi HTML thủ công qua AJAX để bảo toàn 100% sự kiện bấm nút, mở modal, bật menu thao tác và submit biểu mẫu đăng nhập/đăng xuất.
 - Chuẩn hóa toàn bộ biểu tượng sang SVG Vector phẳng theo phong cách Google Drive và tích hợp Logo OpenShare độc quyền để tránh vi phạm bản quyền.
 
+---
+
+## VI. Mở rộng tương thích đa phương tiện và Tối ưu hóa tải tệp
+
+### 1. Hỗ trợ tệp video và âm thanh từ công cụ quay màn hình (Vivaldi, OBS, QuickTime)
+- **Vấn đề trước đây:** Các tệp video MP4 được quay từ trình duyệt (như Vivaldi, Chrome) hoặc phần mềm ghi hình sử dụng container QuickTime / ISO BMFF (`ftypqt  `, `isom`, `mp42`), khiến thư viện `fileinfo` trên Linux/Windows nhận diện MIME là `video/quicktime`, `video/x-m4v` hoặc `video/webm`. Danh sách kiểm tra trước đây chỉ chấp nhận `video/mp4`, dẫn đến thông báo lỗi "Nội dung tệp không khớp phần mở rộng".
+- **Giải pháp:**
+  - Bổ sung các MIME type thực tế của video vào danh sách cho phép (`video/quicktime`, `video/x-m4v`, `video/webm`, `video/x-matroska`, `video/3gpp`).
+  - Nâng cấp hàm `detectedMimeIsAllowed()` để chấp nhận linh hoạt các luồng đa phương tiện an toàn (`video/*`, `audio/*`, `image/*`) khớp với phần mở rộng tương ứng, đồng thời vẫn chặn tuyệt đối các tệp thực thi mã nguy hiểm (`php`, `exe`, `sh`, `html`, `svg`).
+  - Mở rộng hỗ trợ tải lên và phát trực tiếp các định dạng đa phương tiện bổ sung (`mov`, `mkv`, `m4a`, `ogg`) trên trang xem trước `/preview`.
+
