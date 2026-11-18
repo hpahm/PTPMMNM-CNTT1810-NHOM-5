@@ -108,10 +108,14 @@ withStore(function(array &$store): void {
 check(!validShare(readStore()['shares']['required-share'], time()), 'Liên kết đã thu hồi không được trả nội dung');
 check(!allowedExtension('malware.exe') && !detectedMimeIsAllowed('required.txt', __FILE__), 'Từ chối tệp sai loại hoặc nội dung không khớp');
 
-// Phép thử: Chấp nhận video MP4 quay từ trình duyệt (Vivaldi/QuickTime container ftypqt)
+// Phép thử: Chấp nhận video MP4 với mọi kiểu đặt tên tệp (chữ cái, số, dấu cách, tiếng Việt)
 $qtTmp = tempnam(sys_get_temp_dir(), 'os_qt_');
 file_put_contents($qtTmp, pack('N', 20) . 'ftypqt  ' . pack('N', 0) . 'qt  ');
-check(detectedMimeIsAllowed('Drive của tôi · OpenShare - Vivaldi 2026-11-19 03-06-15.mp4', $qtTmp), 'Chấp nhận tệp video MP4/QuickTime quay màn hình từ Vivaldi');
+$arbitraryNamesValid = detectedMimeIsAllowed('video.mp4', $qtTmp)
+    && detectedMimeIsAllowed('screen_recording_2026.mp4', $qtTmp)
+    && detectedMimeIsAllowed('Bản ghi bài thuyết trình nhóm 5.mp4', $qtTmp)
+    && detectedMimeIsAllowed('clip-final-v2.1.mp4', $qtTmp);
+check($arbitraryNamesValid, 'Chấp nhận video MP4/QuickTime với mọi kiểu đặt tên tệp');
 @unlink($qtTmp);
 
 check(is_file(FILE_ROOT . '/test-file-01.bin'), 'Tệp còn liên kết hợp lệ vẫn được giữ trên ổ đĩa');
